@@ -8,7 +8,6 @@ export class AudioManager {
     this.masterGain = null;
     this.enabled = true;
     this.lastAnnouncementAt = 0;
-    this.speechEnabled = "speechSynthesis" in window;
   }
 
   setEnabled(enabled) {
@@ -221,26 +220,4 @@ export class AudioManager {
     });
   }
 
-  announce(text) {
-    if (!this.enabled || !this.speechEnabled || !text) {
-      return;
-    }
-
-    const now = performance.now();
-    if (now - this.lastAnnouncementAt < 700) {
-      return;
-    }
-    this.lastAnnouncementAt = now;
-
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "zh-TW";
-      utterance.rate = 1.02;
-      utterance.pitch = 1;
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      // Ignore speech synthesis errors.
-    }
-  }
 }

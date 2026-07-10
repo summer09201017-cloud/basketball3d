@@ -107,26 +107,26 @@ export const TEAM_THEMES = {
 // 投籃時機窗更寬(shotWindow=綠區倍率,HUD 與命中判定同步吃);青少年以上直接玩入門~職業。
 const DIFFICULTY_PRESETS = {
   kids: {
-    aiMove: 0.55,
-    aiDefense: 0.5,
-    aiShoot: 0.52,
-    aiDecision: 0.58,
+    aiMove: 0.45,
+    aiDefense: 0.38,
+    aiShoot: 0.4,
+    aiDecision: 0.5,
     userAssist: 1.5,
     shotWindow: 2.1,
   },
   child: {
-    aiMove: 0.7,
-    aiDefense: 0.66,
-    aiShoot: 0.66,
-    aiDecision: 0.72,
+    aiMove: 0.6,
+    aiDefense: 0.52,
+    aiShoot: 0.54,
+    aiDecision: 0.62,
     userAssist: 1.3,
     shotWindow: 1.55,
   },
   easy: {
-    aiMove: 0.84,
-    aiDefense: 0.82,
-    aiShoot: 0.78,
-    aiDecision: 0.78,
+    aiMove: 0.76,
+    aiDefense: 0.72,
+    aiShoot: 0.7,
+    aiDecision: 0.72,
     userAssist: 1.16,
   },
   normal: {
@@ -375,6 +375,37 @@ function createPlayerMesh(theme) {
   visor.position.set(0, 2.02, 0.25);
   rig.add(visor);
 
+  // ★臉部鐵則(07-11 使用者點名):眼睛+眉毛+微笑,貼頭前側(+z,與 visor 同向)
+  const faceDark = new THREE.MeshBasicMaterial({ color: 0x25201a });
+  const faceWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), faceWhite);
+  eyeLeft.position.set(-0.1, 2.12, 0.24);
+  rig.add(eyeLeft);
+  const eyeRight = eyeLeft.clone();
+  eyeRight.position.x = 0.1;
+  rig.add(eyeRight);
+  const pupilLeft = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), faceDark);
+  pupilLeft.position.set(-0.1, 2.12, 0.29);
+  rig.add(pupilLeft);
+  const pupilRight = pupilLeft.clone();
+  pupilRight.position.x = 0.1;
+  rig.add(pupilRight);
+  const browLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.022, 0.02), faceDark);
+  browLeft.position.set(-0.1, 2.21, 0.25);
+  browLeft.rotation.z = 0.18;
+  rig.add(browLeft);
+  const browRight = browLeft.clone();
+  browRight.position.x = 0.1;
+  browRight.rotation.z = -0.18;
+  rig.add(browRight);
+  const smile = new THREE.Mesh(
+    new THREE.TorusGeometry(0.075, 0.015, 8, 14, Math.PI),
+    faceDark,
+  );
+  smile.position.set(0, 1.95, 0.24);
+  smile.rotation.z = Math.PI;
+  rig.add(smile);
+
   const leftArm = createLimb(secondaryMaterial, 0.58, 0.5, 0.08);
   leftArm.pivot.position.set(-0.46, 1.66, 0);
   rig.add(leftArm.pivot);
@@ -394,7 +425,7 @@ function createPlayerMesh(theme) {
   const selectionRing = new THREE.Mesh(
     new THREE.RingGeometry(0.5, 0.67, 32),
     new THREE.MeshBasicMaterial({
-      color: theme.ring,
+      color: 0xff2020, // 控制中球員=紅圈(07-11 使用者點名;原 theme.ring 與隊色難分)
       transparent: true,
       opacity: 0.92,
       side: THREE.DoubleSide,
@@ -447,7 +478,7 @@ function applyThemeToVisuals(visuals, theme) {
   visuals.materials.primaryMaterial.color.set(theme.playerPrimary);
   visuals.materials.secondaryMaterial.color.set(theme.playerSecondary);
   visuals.materials.accentMaterial.color.set(theme.accent);
-  visuals.materials.selectionMaterial.color.set(theme.ring);
+  visuals.materials.selectionMaterial.color.set(0xff2020); // 控制圈固定亮紅,不跟隊色(07-11 使用者點名)
   visuals.materials.possessionMaterial.color.set(theme.uiSoft);
 }
 
@@ -1218,8 +1249,9 @@ export class BasketballGame {
       return;
     }
 
-    if (this.input.consumePress("switch") && this.possessionTeam !== "home") {
-      this.switchDefender();
+    if (this.input.consumePress("switch")) {
+      // 防守或無人持球(籃板/散球)都能切;進攻時控制自動跟持球者,Tab 不需要
+      if (this.possessionTeam !== "home" || !this.getBallOwner()) this.switchDefender();
     }
 
     const move = this.input.getMovementVector();
@@ -1228,7 +1260,7 @@ export class BasketballGame {
 
     if (movement.lengthSq() > 0) {
       movement.normalize();
-      this.applyMotion(player, movement, delta, isSprint ? 1.24 : 1.02);
+      this.applyMotion(player, movement, delta, isSprint ? 1.62 : 1.02); // 衝刺要明顯(07-11 使用者:按 Shift 沒衝刺)
     } else {
       this.applyMotion(player, null, delta, 1);
     }
@@ -1327,14 +1359,38 @@ export class BasketballGame {
     }
 
     if (!owner) {
+      // 散球:每隊只派離球最近的 2 人去追,其餘拉開站位——
+      // 原本 9 人全衝球點,推擠力互鎖成一團動彈不得(07-11 使用者回報 bug)
+      const chasers = new Set();
+      for (const team of ["home", "away"]) {
+        const sorted = this.getTeamPlayers(team)
+          .filter((p) => this.getUserControlledPlayer().id !== p.id)
+          .sort(
+            (a, b) =>
+              distanceXZ(a.position, this.ball.position) -
+              distanceXZ(b.position, this.ball.position),
+          );
+        for (const p of sorted.slice(0, 2)) {
+          chasers.add(p.id);
+        }
+      }
       for (const player of this.players) {
         if (this.getUserControlledPlayer().id === player.id) {
           continue;
         }
         if (this.shouldRunReboundFlow()) {
           this.updateReboundAI(player, delta);
-        } else {
+        } else if (chasers.has(player.id)) {
           this.movePlayerTo(player, this.ball.position, delta, 1.08);
+        } else {
+          const index = this.players.indexOf(player);
+          const angle = (index / this.players.length) * Math.PI * 2;
+          const spread = new THREE.Vector3(
+            clamp(this.ball.position.x + Math.cos(angle) * 4.6, -12.5, 12.5),
+            0,
+            clamp(this.ball.position.z + Math.sin(angle) * 3.4, -6.5, 6.5),
+          );
+          this.movePlayerTo(player, spread, delta, 0.82);
         }
       }
       return;
@@ -1565,6 +1621,7 @@ export class BasketballGame {
     const duration = clamp(distance / 9.5, 0.38, 0.75);
     this.ball.ownerId = null;
     this.ball.passTargetId = target.id;
+    this.ball.passerId = passer.id; // 傳球者短時間內不能自接(J 鍵傳球 bug 根因)
     this.ball.pendingShot = null;
     this.ball.freeTimer = 0;
     this.ball.lastTouchTeam = passer.team;
@@ -1643,15 +1700,25 @@ export class BasketballGame {
 
     defender.cooldown = 0.8;
 
+    // 撲抄突進:朝持球者衝一步+鏡頭微震——按 K 一定看得到動作(07-11 使用者:無明顯反應)
+    if (userInitiated) {
+      const lunge = new THREE.Vector3()
+        .subVectors(owner.position, defender.position)
+        .setY(0)
+        .normalize();
+      defender.velocity.addScaledVector(lunge, 5.2);
+      this.cameraShake = Math.max(this.cameraShake, 0.1);
+    }
+
     const difficulty = this.difficultyPreset;
     const spacing = distanceXZ(defender.position, owner.position);
-    const spacingFactor = clamp(1 - spacing / 1.25, 0.08, 1);
+    const spacingFactor = clamp(1 - spacing / 1.9, 0.08, 1);
     const staminaFactor = THREE.MathUtils.lerp(0.82, 1.08, defender.stamina);
     const baseChance =
       defender.defense *
       staminaFactor *
       spacingFactor *
-      (userInitiated ? 0.28 : 0.2 * difficulty.aiDefense) *
+      (userInitiated ? 0.5 : 0.2 * difficulty.aiDefense) *
       (this.ball.pendingShot ? 0.75 : 1);
 
     if (Math.random() < baseChance) {
@@ -1681,6 +1748,7 @@ export class BasketballGame {
       });
     } else if (userInitiated) {
       this.message = "差一點抄到，趕快回防。";
+      this.emitEvent("steal-try", {});
     }
   }
 
@@ -1940,6 +2008,12 @@ export class BasketballGame {
     let nearestDistance = Number.POSITIVE_INFINITY;
 
     for (const player of this.players) {
+      if (this.ball.passTargetId) {
+        // ★J 鍵傳球 bug 根因(07-11):球從傳球者位置出發,下一幀「最近球員」=傳球者自己,
+        //   立刻自接還報「抄到傳球」→ 傳球永遠傳不出去。出手初期傳球者/非目標都不能接。
+        if (player.id === this.ball.passerId && this.ball.freeTimer < 0.35) continue;
+        if (player.id !== this.ball.passTargetId && this.ball.freeTimer < 0.12) continue;
+      }
       const distance = distanceXZ(player.position, this.ball.position);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -1953,6 +2027,15 @@ export class BasketballGame {
 
     const passTargetId = this.ball.passTargetId;
     const intercept = Boolean(passTargetId && nearestPlayer.id !== passTargetId);
+    // 攔截不再是「站在路徑上=必攔」:要貼很近+機率(AI 吃難度係數;幼兒檔幾乎攔不到)
+    if (intercept) {
+      if (nearestDistance > 0.62) return;
+      const rate =
+        nearestPlayer.team === "away"
+          ? 0.4 * this.difficultyPreset.aiDefense
+          : 0.5;
+      if (Math.random() > rate) return;
+    }
     const wasShot = Boolean(this.ball.pendingShot);
 
     this.ball.ownerId = nearestPlayer.id;

@@ -73,6 +73,7 @@ const game = new BasketballGame({
   canvas: ui.canvas,
   touchRoot: ui.touchControls,
 });
+window.__bball = game; // dev hook:Playwright 凍結畫面/數值驗證用(比照 baseball3d)
 
 let selectedModeId = game.modeId;
 let selectedHomeThemeId = game.homeThemeId;
@@ -269,6 +270,10 @@ function handleGameEvent(event) {
       pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
     }
+    case "steal-try":
+      audio.thud(0.5);
+      pushCommentary("出手抄截——差一點!", "info", "");
+      break;
     case "contact":
       audio.thud(event.strength);
       break;
@@ -499,7 +504,8 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-if ("serviceWorker" in navigator) {
+// dev(localhost)不註冊 SW——SW 快取會讓每次改動都吃到「上一版」,害測試誤判(07-11 踩雷)
+if ("serviceWorker" in navigator && !["localhost", "127.0.0.1"].includes(location.hostname)) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       ui.installHint.textContent = "Service Worker 註冊失敗，但仍可直接遊玩。";
