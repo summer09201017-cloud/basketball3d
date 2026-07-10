@@ -107,26 +107,26 @@ export const TEAM_THEMES = {
 // 投籃時機窗更寬(shotWindow=綠區倍率,HUD 與命中判定同步吃);青少年以上直接玩入門~職業。
 const DIFFICULTY_PRESETS = {
   kids: {
-    aiMove: 0.45,
-    aiDefense: 0.38,
-    aiShoot: 0.4,
-    aiDecision: 0.5,
+    aiMove: 0.52,
+    aiDefense: 0.45,
+    aiShoot: 0.5,
+    aiDecision: 0.55,
     userAssist: 1.5,
     shotWindow: 2.1,
   },
   child: {
-    aiMove: 0.6,
-    aiDefense: 0.52,
-    aiShoot: 0.54,
-    aiDecision: 0.62,
+    aiMove: 0.66,
+    aiDefense: 0.6,
+    aiShoot: 0.62,
+    aiDecision: 0.68,
     userAssist: 1.3,
     shotWindow: 1.55,
   },
   easy: {
-    aiMove: 0.76,
-    aiDefense: 0.72,
-    aiShoot: 0.7,
-    aiDecision: 0.72,
+    aiMove: 0.8,
+    aiDefense: 0.77,
+    aiShoot: 0.75,
+    aiDecision: 0.75,
     userAssist: 1.16,
   },
   normal: {
@@ -578,7 +578,9 @@ export class BasketballGame {
     this.pointer = {
       cameraFocus: new THREE.Vector3(),
       cameraPosition: new THREE.Vector3(-6, 18, 19),
+      cameraLook: new THREE.Vector3(5.4, 0.4, 0),
     };
+    this.cameraView = 0; // 視角三檔(07-11 使用者拍板):0=斜側 1=180°對面 2=高空俯瞰;V 鍵/按鈕循環
 
     this.players = [];
     this.ball = {
@@ -1249,6 +1251,10 @@ export class BasketballGame {
       return;
     }
 
+    if (this.input.consumePress("camera")) {
+      this.cycleCameraView();
+    }
+
     if (this.input.consumePress("switch")) {
       // 防守或無人持球(籃板/散球)都能切;進攻時控制自動跟持球者,Tab 不需要
       if (this.possessionTeam !== "home" || !this.getBallOwner()) this.switchDefender();
@@ -1657,10 +1663,10 @@ export class BasketballGame {
     const timingBoost = isUserShot ? clamp(1.2 - timingError / (0.18 * windowScale), 0.72, 1.2) : 1;
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
-      (shotBase + finishingBoost) * userAssist * timingBoost * staminaBoost,
-      0.1,
+      (shotBase + finishingBoost) * 1.18 * userAssist * timingBoost * staminaBoost,
+      0.16,
       0.94,
-    );
+    ); // 1.18 全域加成:雙方命中率一起提高(07-11 使用者點名)
     const willScore = Math.random() < accuracy;
     const missSpread = clamp(1 - accuracy, 0.05, 0.46);
     const aim = targetHoop.clone();
@@ -2075,6 +2081,15 @@ export class BasketballGame {
     this.ball.pendingShot = null;
   }
 
+  // 視角三檔循環:斜側→180°對面→高空俯瞰;鏡頭用既有 lerp 平滑轉過去,選擇記進存檔
+  cycleCameraView() {
+    this.cameraView = (this.cameraView + 1) % 3;
+    const names = ["斜側視角", "180° 對面視角", "高空俯瞰"];
+    this.message = `視角切換:${names[this.cameraView]}。`;
+    this.saveGame(true);
+    this.pushHud();
+  }
+
   switchDefender() {
     const homePlayers = this.getTeamPlayers("home");
     const reference = this.getBallOwner()?.position || this.ball.position;
@@ -2100,11 +2115,22 @@ export class BasketballGame {
       1 - Math.exp(-delta * 3.2),
     );
 
-    const desiredPosition = new THREE.Vector3(
-      this.pointer.cameraFocus.x - 6.8,
-      18.2,
-      18.7 + Math.abs(this.pointer.cameraFocus.z) * 0.18,
-    );
+    const fx = this.pointer.cameraFocus.x;
+    const fz = this.pointer.cameraFocus.z;
+    const depth = 18.7 + Math.abs(fz) * 0.18;
+    let desiredPosition, desiredLook;
+    if (this.cameraView === 1) {
+      // 180° 對面斜側(換邊進攻時看得順)
+      desiredPosition = new THREE.Vector3(fx + 6.8, 18.2, -depth);
+      desiredLook = new THREE.Vector3(fx - 5.4, 0.4, fz);
+    } else if (this.cameraView === 2) {
+      // 高空俯瞰(戰術全景;z 略偏免得正上方翻轉)
+      desiredPosition = new THREE.Vector3(fx, 33, fz + 4.2);
+      desiredLook = new THREE.Vector3(fx, 0, fz);
+    } else {
+      desiredPosition = new THREE.Vector3(fx - 6.8, 18.2, depth);
+      desiredLook = new THREE.Vector3(fx + 5.4, 0.4, fz);
+    }
 
     this.pointer.cameraPosition.lerp(desiredPosition, 1 - Math.exp(-delta * 2.7));
     this.camera.position.copy(this.pointer.cameraPosition);
@@ -2115,7 +2141,8 @@ export class BasketballGame {
       this.camera.position.z += randomSigned(this.cameraShake * 0.5);
     }
 
-    this.camera.lookAt(this.pointer.cameraFocus.x + 5.4, 0.4, this.pointer.cameraFocus.z);
+    this.pointer.cameraLook.lerp(desiredLook, 1 - Math.exp(-delta * 2.7));
+    this.camera.lookAt(this.pointer.cameraLook);
   }
 
   animatePlayer(player, delta) {
@@ -2209,6 +2236,7 @@ export class BasketballGame {
   saveGame(silent = false) {
     const snapshot = {
       version: 3,
+      cameraView: this.cameraView,
       difficulty: this.difficulty,
       modeId: this.modeId,
       homeThemeId: this.homeThemeId,
@@ -2274,6 +2302,7 @@ export class BasketballGame {
       ? snapshot.awayThemeId
       : this.awayThemeId;
     this.mode = getModeConfig(this.modeId);
+    this.cameraView = [0, 1, 2].includes(snapshot.cameraView) ? snapshot.cameraView : 0;
     this.applyThemeSelections();
     this.savePresentationSettings();
 

@@ -11,6 +11,7 @@ const KEY_BINDINGS = {
   KeyJ: "pass",
   KeyK: "action",
   Tab: "switch",
+  KeyV: "camera",
   ShiftLeft: "sprint",
   ShiftRight: "sprint",
   Escape: "pause",

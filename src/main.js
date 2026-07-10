@@ -11,6 +11,7 @@ import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
 
 const ui = {
   canvas: document.querySelector("#gameCanvas"),
+  cameraButton: document.querySelector("#cameraButton"),
   homeScore: document.querySelector("#homeScore"),
   awayScore: document.querySelector("#awayScore"),
   homeTeamName: document.querySelector("#homeTeamName"),
@@ -438,6 +439,10 @@ ui.overlayMenuButton.addEventListener("click", () => {
   unlockAudio();
   audio.uiTap();
   openHomeScreen();
+});
+
+ui.cameraButton.addEventListener("click", () => {
+  game.cycleCameraView();
 });
 
 ui.saveButton.addEventListener("click", () => {
