@@ -1215,6 +1215,7 @@ export class BasketballGame {
         } else {
           this.handleUserControl(delta);
           this.updateAI(delta);
+          this.updateFreeThrow(delta);
           this.updateStamina(delta);
           this.updatePlayers(delta);
           this.updateBall(delta);
@@ -1294,6 +1295,7 @@ export class BasketballGame {
   }
 
   handleUserControl(delta) {
+    if (this.freeThrow) return; // 罰球演出中不操作
     const player = this.getUserControlledPlayer();
     if (!player) {
       return;
@@ -1403,6 +1405,8 @@ export class BasketballGame {
   }
 
   updateAI(delta) {
+    if (this.freeThrow) return; // 罰球演出中,全員站位
+
     const owner = this.getBallOwner();
 
     for (const player of this.players) {
@@ -1555,7 +1559,11 @@ export class BasketballGame {
       helpVector.normalize();
     }
 
-    target.addScaledVector(helpVector, mark.id === owner.id ? 0.72 : 1.15);
+    // 防守留距(07-11 使用者:AI 貼防到不能走路運球)——依難度站開:
+    // 幼兒約 2.5m、標準約 1.4m、職業約 1.1m;目標點在「持球者往籃框方向」的留距處,
+    // 太貼時 movePlayerTo 會自然退開,不再擠進碰撞圈推人。
+    const guardDist = clamp(3.6 - 2 * difficulty.aiDefense, 1.3, 3.0);
+    target.addScaledVector(helpVector, mark.id === owner.id ? guardDist : 1.6);
     target.z += mark.id === owner.id ? clamp(owner.velocity.z * 0.14, -0.5, 0.5) : 0;
 
     this.movePlayerTo(
@@ -1715,14 +1723,23 @@ export class BasketballGame {
       0.22,
       0.94,
     ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
-    const willScore = Math.random() < accuracy;
-    const missSpread = clamp(1 - accuracy, 0.05, 0.46);
+    // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
+    const isDunk = distance < 2.3;
+    const finalAccuracy = isDunk ? clamp(accuracy + 0.24, 0.6, 0.97) : accuracy;
+    const willScore = Math.random() < finalAccuracy;
+    const missSpread = clamp(1 - finalAccuracy, 0.05, 0.46);
     const aim = targetHoop.clone();
     aim.x += willScore ? randomSigned(0.08) : randomSigned(0.45 + missSpread);
     aim.z += willScore ? randomSigned(0.08) : randomSigned(0.55 + missSpread);
     aim.y = RIM_HEIGHT + (willScore ? 0.04 : randomSigned(0.22));
 
-    const duration = clamp(distance / 10.5, 0.88, 1.34);
+    const duration = isDunk ? 0.42 : clamp(distance / 10.5, 0.88, 1.34);
+
+    // 犯規:防守者貼身(<0.95m)干擾出手,有機率吹哨→罰球兩次(一直貼防就會送罰球)
+    if (!this.freeThrow && nearestDefender.distance < 0.95 && Math.random() < 0.24) {
+      this.startFreeThrows(shooter, 2, isDunk);
+      return;
+    }
 
     this.ball.ownerId = null;
     this.ball.passTargetId = null;
@@ -1735,9 +1752,11 @@ export class BasketballGame {
       shooterTeam: shooter.team,
       points,
       willScore,
+      dunk: isDunk,
       targetHoop: this.getTargetHoopKey(shooter.team), // 半場共攻一框(07-11 根因:寫死全場對應,判定量錯框)
       checkedRim: false,
     };
+    if (isDunk) this.cameraShake = Math.max(this.cameraShake, 0.16);
 
     if (isUserShot) {
       this.message = `${getShotTimingLabel(releaseValue)}，出手 ${points} 分球。`;
@@ -1803,7 +1822,70 @@ export class BasketballGame {
     } else if (userInitiated) {
       this.message = "差一點抄到，趕快回防。";
       this.emitEvent("steal-try", {});
+    } else if (!this.freeThrow && spacing < 0.9 && Math.random() < 0.3) {
+      // AI 抄截揮空+貼太近=打手犯規→持球者罰球兩次(貼防的代價)
+      this.startFreeThrows(owner, 2, false);
     }
+  }
+
+  // ── 罰球(07-11 使用者點名:犯規罰兩球,每球 1 分)──
+  startFreeThrows(shooter, count, wasDunk) {
+    this.freeThrow = { shooterId: shooter.id, remaining: count, timer: 1.5, total: count };
+    this.ball.pendingShot = null;
+    this.ball.passTargetId = null;
+    this.ball.velocity.set(0, 0, 0);
+    this.ball.ownerId = shooter.id;
+    this.cancelShotMeter();
+    // 罰球員站罰球線(目標框往場中央 4.6m),其他人退開
+    const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
+    const spotX = hoop.x + (hoop.x < 0 ? 4.6 : -4.6);
+    shooter.position.set(spotX, 0, 0);
+    shooter.velocity.set(0, 0, 0);
+    for (const p of this.players) {
+      if (p.id === shooter.id) continue;
+      const away = Math.sign(spotX - hoop.x) || 1;
+      if (distanceXZ(p.position, shooter.position) < 2.4) {
+        p.position.x = clamp(spotX + away * 2.8, -12.5, 12.5);
+        p.position.z = clamp(p.position.z * 1.4 + (p.position.z >= 0 ? 1 : -1), -6, 6);
+      }
+      p.velocity.set(0, 0, 0);
+    }
+    this.message = `${wasDunk ? "灌籃被犯規!" : "防守犯規!"}罰球 ${count} 次。`;
+    this.emitEvent("foul", { teamLabel: this.getTeamLabel(shooter.team), count });
+  }
+
+  updateFreeThrow(delta) {
+    const ft = this.freeThrow;
+    if (!ft || this.ball.pendingShot) return;
+    ft.timer -= delta;
+    if (ft.timer > 0) return;
+    const shooter = this.getPlayerById(ft.shooterId);
+    if (!shooter || ft.remaining <= 0) { this.freeThrow = null; return; }
+    ft.remaining -= 1;
+    const difficulty = this.difficultyPreset;
+    const prob = shooter.team === "home" ? 0.82 : clamp(0.45 + 0.4 * difficulty.aiShoot, 0.5, 0.85);
+    const willScore = Math.random() < prob;
+    const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
+    const release = shooter.position.clone(); release.y = 1.6;
+    const aim = hoop.clone();
+    aim.x += willScore ? randomSigned(0.06) : randomSigned(0.4);
+    aim.z += willScore ? randomSigned(0.06) : randomSigned(0.45);
+    aim.y = RIM_HEIGHT + (willScore ? 0.04 : randomSigned(0.2));
+    this.ball.ownerId = null;
+    this.ball.lastTouchTeam = shooter.team;
+    this.ball.freeTimer = 0;
+    this.ball.position.copy(release);
+    this.ball.velocity.copy(buildLaunchVelocity(release, aim, 1.05, -18));
+    this.ball.pendingShot = {
+      shooterId: shooter.id,
+      shooterTeam: shooter.team,
+      points: 1,
+      willScore,
+      freeThrow: true,
+      targetHoop: this.getTargetHoopKey(shooter.team),
+      checkedRim: false,
+    };
+    this.message = `罰球出手(第 ${ft.total - ft.remaining}/${ft.total} 罰)。`;
   }
 
   updateStamina(delta) {
@@ -2037,12 +2119,28 @@ export class BasketballGame {
       team: shot.shooterTeam,
       teamLabel,
       points: shot.points,
+      dunk: !!shot.dunk,
+      freeThrow: !!shot.freeThrow,
       homeScore: this.score.home,
       awayScore: this.score.away,
     });
 
     if (this.checkTargetScoreWin(shot.shooterTeam)) {
+      this.freeThrow = null;
       this.finishMatch();
+      return;
+    }
+
+    // 罰球命中:還有剩→球回罰球員繼續罰;罰完→對方發球
+    if (shot.freeThrow && this.freeThrow) {
+      if (this.freeThrow.remaining > 0) {
+        this.ball.ownerId = this.freeThrow.shooterId;
+        this.freeThrow.timer = 1.5;
+      } else {
+        const scorer = shot.shooterTeam;
+        this.freeThrow = null;
+        this.deadBallTo(scorer === "home" ? "away" : "home", "罰球結束，攻守交換。", 0.95);
+      }
       return;
     }
 
@@ -2061,6 +2159,21 @@ export class BasketballGame {
   resolveLooseBall() {
     if (this.getBallOwner() || this.deadBallTimer > 0) {
       return;
+    }
+
+    // 罰球中:還有剩的罰球不落地搶——球回罰球員手上;最後一罰不進才開放搶籃板
+    if (this.freeThrow) {
+      if (this.freeThrow.remaining > 0) {
+        if (this.ball.position.y < 1.2) {
+          this.ball.pendingShot = null;
+          this.ball.velocity.set(0, 0, 0);
+          this.ball.ownerId = this.freeThrow.shooterId;
+          this.freeThrow.timer = 1.4;
+        }
+        return;
+      }
+      if (this.ball.position.y < 1.42) this.freeThrow = null; // 末罰不進=活球
+      else return;
     }
 
     const isShot = Boolean(this.ball.pendingShot);

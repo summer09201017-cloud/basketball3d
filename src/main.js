@@ -262,6 +262,14 @@ function handleGameEvent(event) {
       audio.swish();
       audio.scoreSting();
       audio.vibrate([35, 25, 55]);
+      if (event.dunk) {
+        pushCommentary(`${event.teamLabel} 飛身暴扣!全場沸騰!`, event.team === "home" ? "hot" : "cool", "飛身暴扣!全場沸騰!");
+        break;
+      }
+      if (event.freeThrow) {
+        pushCommentary(`${event.teamLabel} 罰球命中,+1 分。(${event.homeScore}:${event.awayScore})`, event.team === "home" ? "hot" : "cool", "罰球命中!");
+        break;
+      }
       const line = scoreCommentary(event);
       pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
@@ -285,6 +293,12 @@ function handleGameEvent(event) {
         { sub: `卡好位置,${event.teamLabel} 保護住籃板。`, say: "卡好位置,保護住籃板。" },
       ]);
       pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
+      break;
+    }
+    case "foul": {
+      audio.whistle();
+      audio.vibrate([40, 30, 40]);
+      pushCommentary(`哨聲響起——防守犯規!${event.teamLabel} 獲得 ${event.count} 次罰球!`, "hot", "防守犯規,罰球兩次!");
       break;
     }
     case "steal-try":
