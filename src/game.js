@@ -931,9 +931,13 @@ export class BasketballGame {
     return this.getControlledHomePlayer();
   }
 
+  getTargetHoopKey(team) {
+    if (this.courtMode === "half") return "home"; // 半場:共攻同一框
+    return team === "home" ? "away" : "home";
+  }
+
   getTargetHoopForTeam(team) {
-    if (this.courtMode === "half") return this.hoops.home; // 半場:共攻同一框
-    return team === "home" ? this.hoops.away : this.hoops.home;
+    return this.hoops[this.getTargetHoopKey(team)];
   }
 
   getOwnHoop(team) {
@@ -1697,7 +1701,7 @@ export class BasketballGame {
     const distance = distanceXZ(release, targetHoop);
     const points = distance > 6.75 ? 3 : 2;
     const nearestDefender = this.findNearestDefender(shooter);
-    const openness = clamp(nearestDefender.distance / 2.8, 0.3, 1.2);
+    const openness = clamp(nearestDefender.distance / 2.8, 0.5, 1.2); // 下限 0.3→0.5:半場貼防不壓死命中(07-11)
     const rangePenalty = clamp((distance - 4.5) / 11.5, 0, 0.48);
     const staminaBoost = THREE.MathUtils.lerp(0.8, 1.08, shooter.stamina);
     const shotBase = shooter.shoot * openness * (1 - rangePenalty);
@@ -1707,10 +1711,10 @@ export class BasketballGame {
     const timingBoost = isUserShot ? clamp(1.2 - timingError / (0.18 * windowScale), 0.72, 1.2) : 1;
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
-      (shotBase + finishingBoost) * 1.18 * userAssist * timingBoost * staminaBoost,
-      0.16,
+      (shotBase + finishingBoost) * 1.34 * userAssist * timingBoost * staminaBoost,
+      0.22,
       0.94,
-    ); // 1.18 全域加成:雙方命中率一起提高(07-11 使用者點名)
+    ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     const willScore = Math.random() < accuracy;
     const missSpread = clamp(1 - accuracy, 0.05, 0.46);
     const aim = targetHoop.clone();
@@ -1731,7 +1735,7 @@ export class BasketballGame {
       shooterTeam: shooter.team,
       points,
       willScore,
-      targetHoop: shooter.team === "home" ? "away" : "home",
+      targetHoop: this.getTargetHoopKey(shooter.team), // 半場共攻一框(07-11 根因:寫死全場對應,判定量錯框)
       checkedRim: false,
     };
 
