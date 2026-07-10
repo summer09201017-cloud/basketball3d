@@ -6,6 +6,7 @@ import {
   TEAM_THEMES,
 } from "./game.js";
 import { AudioManager } from "./audio.js";
+import { speakLine, setVoiceEnabled } from "./voice.js";
 import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
 
 const ui = {
@@ -111,6 +112,7 @@ function applyCssTheme(homeThemeId, awayThemeId) {
 function setAudioState(enabled) {
   audioEnabled = enabled;
   audio.setEnabled(enabled);
+  setVoiceEnabled(enabled);
   ui.audioStatus.textContent = enabled ? "開啟" : "靜音";
   ui.audioButton.textContent = enabled ? "音效開啟" : "音效靜音";
   ui.audioSelect.value = enabled ? "on" : "off";
@@ -177,7 +179,8 @@ function unlockAudio() {
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 let lastLeadSign = 0; // 上一次的比分差正負(判斷反超/追平)
 
-function pushCommentary(text, tone = "info") {
+// spoken=實際唸出的固定句(預烤 mp3 人聲;含隊名/比分的字幕只唸固定部分)
+function pushCommentary(text, tone = "info", spoken = text) {
   const bar = ui.commentaryBar;
   if (!bar || !text) return;
   bar.hidden = false;
@@ -187,30 +190,34 @@ function pushCommentary(text, tone = "info") {
   bar.style.animation = "none";
   void bar.offsetWidth;
   bar.style.animation = "";
+  speakLine(spoken);
 }
 
 function scoreCommentary(event) {
   const t = event.teamLabel;
-  const base = event.points === 3
-    ? pick([
-        `三分線外開火——唰!${t} 三分命中!`,
-        `好深的三分!${t} 手感發燙!`,
-        `${t} 冷靜出手,三分球應聲入網!`,
-      ])
-    : pick([
-        `${t} 切入上籃得手!`,
-        `${t} 中距離跳投,穩穩命中!`,
-        `漂亮的配合,${t} 輕鬆拿下 2 分!`,
-      ]);
+  // 字幕帶隊名,唸稿用固定句(對應 voicePhrases 預烤 mp3)
+  const bank = event.points === 3
+    ? [
+        { sub: `三分線外開火——唰!${t} 三分命中!`, say: "三分線外開火——唰!三分命中!" },
+        { sub: `好深的三分!${t} 手感發燙!`, say: "好深的三分!手感發燙!" },
+        { sub: `${t} 冷靜出手,三分球應聲入網!`, say: "冷靜出手,三分球應聲入網!" },
+      ]
+    : [
+        { sub: `${t} 切入上籃得手!`, say: "切入上籃得手!" },
+        { sub: `${t} 中距離跳投,穩穩命中!`, say: "中距離跳投,穩穩命中!" },
+        { sub: `漂亮的配合,${t} 輕鬆拿下 2 分!`, say: "漂亮的配合,輕鬆拿下兩分!" },
+      ];
+  const chosen = pick(bank);
   const diff = event.homeScore - event.awayScore;
   const sign = Math.sign(diff);
-  let tail = "";
-  if (sign === 0) tail = `雙方 ${event.homeScore} 平,戰成拉鋸!`;
-  else if (lastLeadSign !== 0 && sign !== lastLeadSign) tail = `${t} 反超了!${event.homeScore} 比 ${event.awayScore}!`;
-  else if (Math.abs(diff) >= 10) tail = `分差拉開到 ${Math.abs(diff)} 分,${event.homeScore} 比 ${event.awayScore}。`;
+  let tail = "", tailSay = "";
+  if (sign === 0) { tail = `雙方 ${event.homeScore} 平,戰成拉鋸!`; tailSay = "戰成拉鋸!"; }
+  else if (lastLeadSign !== 0 && sign !== lastLeadSign) { tail = `${t} 反超了!${event.homeScore} 比 ${event.awayScore}!`; tailSay = "反超了!"; }
+  else if (Math.abs(diff) >= 10) { tail = `分差拉開到 ${Math.abs(diff)} 分。`; tailSay = "分差拉開了!"; }
   else tail = `${event.homeScore} 比 ${event.awayScore}。`;
   lastLeadSign = sign;
-  return `${base} ${tail}`;
+  void tailSay; // 一次只唸一句(主句);情境尾聲交給字幕
+  return { sub: `${chosen.sub} ${tail}`, say: chosen.say };
 }
 
 function handleGameEvent(event) {
@@ -221,20 +228,16 @@ function handleGameEvent(event) {
       lastLeadSign = 0;
       const line = pick(["比賽開始!雙方跳球爭搶!", "哨聲響起,全場對決開打!", "球員就位——比賽開始!"]);
       pushCommentary(line);
-      audio.announce(line);
       break;
     }
     case "period-start":
       audio.whistle();
-      if (event.announce) pushCommentary(event.announce);
-      audio.announce(event.announce);
+      if (event.announce) pushCommentary(event.announce, "info", "新的一節,開始!");
       break;
     case "period-end": {
       audio.buzzer();
       audio.vibrate([70, 40, 90]);
-      const line = `${event.period || "本節"}結束!`;
-      pushCommentary(line);
-      audio.announce(line);
+      pushCommentary(`${event.period || "本節"}結束!`, "info", "本節結束!");
       break;
     }
     case "score": {
@@ -242,30 +245,28 @@ function handleGameEvent(event) {
       audio.scoreSting();
       audio.vibrate([35, 25, 55]);
       const line = scoreCommentary(event);
-      pushCommentary(line, event.team === "home" ? "hot" : "cool");
-      audio.announce(line);
+      pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
     }
     case "steal": {
       audio.steal();
       audio.vibrate(28);
       const line = pick([
-        `漂亮的抄截!${event.teamLabel} 打出反擊!`,
-        `${event.teamLabel} 眼明手快,把球抄走了!`,
-        `一個閃神——${event.teamLabel} 抄截成功!`,
+        { sub: `漂亮的抄截!${event.teamLabel} 打出反擊!`, say: "漂亮的抄截!打出反擊!" },
+        { sub: `${event.teamLabel} 眼明手快,把球抄走了!`, say: "眼明手快,把球抄走了!" },
+        { sub: `一個閃神——${event.teamLabel} 抄截成功!`, say: "一個閃神,球被抄截了!" },
       ]);
-      pushCommentary(line, event.team === "home" ? "hot" : "cool");
-      audio.announce(line);
+      pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
     }
     case "rebound": {
       audio.rebound();
       const line = pick([
-        `${event.teamLabel} 搶下籃板!`,
-        `籃板球是 ${event.teamLabel} 的!`,
-        `卡好位置,${event.teamLabel} 保護住籃板。`,
+        { sub: `${event.teamLabel} 搶下籃板!`, say: "搶下籃板!" },
+        { sub: `籃板球是 ${event.teamLabel} 的!`, say: "籃板球到手!" },
+        { sub: `卡好位置,${event.teamLabel} 保護住籃板。`, say: "卡好位置,保護住籃板。" },
       ]);
-      pushCommentary(line, event.team === "home" ? "hot" : "cool");
+      pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
     }
     case "contact":
@@ -278,8 +279,7 @@ function handleGameEvent(event) {
       audio.horn();
       audio.vibrate([110, 50, 120]);
       const line = `終場哨響!${event.winnerLabel} 獲勝,最終比分 ${event.homeScore} 比 ${event.awayScore}!`;
-      pushCommentary(line, event.winnerTeam === "home" ? "hot" : "cool");
-      audio.announce(line);
+      pushCommentary(line, event.winnerTeam === "home" ? "hot" : "cool", "終場哨響!比賽結束!");
       break;
     }
     default:
