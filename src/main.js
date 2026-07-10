@@ -1,0 +1,442 @@
+import "./styles.css";
+import {
+  BasketballGame,
+  DIFFICULTY_LABELS,
+  GAME_MODES,
+  TEAM_THEMES,
+} from "./game.js";
+import { AudioManager } from "./audio.js";
+import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
+
+const ui = {
+  canvas: document.querySelector("#gameCanvas"),
+  homeScore: document.querySelector("#homeScore"),
+  awayScore: document.querySelector("#awayScore"),
+  homeTeamName: document.querySelector("#homeTeamName"),
+  awayTeamName: document.querySelector("#awayTeamName"),
+  gameClock: document.querySelector("#gameClock"),
+  shotClock: document.querySelector("#shotClock"),
+  periodLabel: document.querySelector("#periodLabel"),
+  modeCode: document.querySelector("#modeCode"),
+  phaseLabel: document.querySelector("#phaseLabel"),
+  statusMessage: document.querySelector("#statusMessage"),
+  modeLabel: document.querySelector("#modeLabel"),
+  possessionLabel: document.querySelector("#possessionLabel"),
+  controlledLabel: document.querySelector("#controlledLabel"),
+  difficultyLabel: document.querySelector("#difficultyLabel"),
+  homeThemeLabel: document.querySelector("#homeThemeLabel"),
+  awayThemeLabel: document.querySelector("#awayThemeLabel"),
+  audioStatus: document.querySelector("#audioStatus"),
+  saveStatus: document.querySelector("#saveStatus"),
+  installButton: document.querySelector("#installButton"),
+  installHint: document.querySelector("#installHint"),
+  saveButton: document.querySelector("#saveButton"),
+  loadButton: document.querySelector("#loadButton"),
+  menuButton: document.querySelector("#menuButton"),
+  audioButton: document.querySelector("#audioButton"),
+  pauseButton: document.querySelector("#pauseButton"),
+  touchControls: document.querySelector("#touchControls"),
+  shotMeterFill: document.querySelector("#shotMeterFill"),
+  shotMeterWindow: document.querySelector("#shotMeterWindow"),
+  shotMeterText: document.querySelector("#shotMeterText"),
+  staminaFill: document.querySelector("#staminaFill"),
+  staminaValue: document.querySelector("#staminaValue"),
+  matchOverlay: document.querySelector("#matchOverlay"),
+  overlayEyebrow: document.querySelector("#overlayEyebrow"),
+  overlayTitle: document.querySelector("#overlayTitle"),
+  overlayText: document.querySelector("#overlayText"),
+  resumeButton: document.querySelector("#resumeButton"),
+  overlayMenuButton: document.querySelector("#overlayMenuButton"),
+  overlayLoadButton: document.querySelector("#overlayLoadButton"),
+  homeScreen: document.querySelector("#homeScreen"),
+  modeCardGrid: document.querySelector("#modeCardGrid"),
+  modeDescription: document.querySelector("#modeDescription"),
+  homeThemeSelect: document.querySelector("#homeThemeSelect"),
+  awayThemeSelect: document.querySelector("#awayThemeSelect"),
+  homeThemePreview: document.querySelector("#homeThemePreview"),
+  awayThemePreview: document.querySelector("#awayThemePreview"),
+  menuDifficultySelect: document.querySelector("#menuDifficultySelect"),
+  audioSelect: document.querySelector("#audioSelect"),
+  modeMetaTitle: document.querySelector("#modeMetaTitle"),
+  modeMetaGoal: document.querySelector("#modeMetaGoal"),
+  startMatchButton: document.querySelector("#startMatchButton"),
+  continueSavedButton: document.querySelector("#continueSavedButton"),
+};
+
+const settings = loadSettings();
+const audio = new AudioManager();
+audio.setEnabled(settings.audioEnabled !== false);
+
+const game = new BasketballGame({
+  canvas: ui.canvas,
+  touchRoot: ui.touchControls,
+});
+
+let selectedModeId = game.modeId;
+let selectedHomeThemeId = game.homeThemeId;
+let selectedAwayThemeId = game.awayThemeId;
+let selectedDifficulty = game.difficulty;
+let audioEnabled = settings.audioEnabled !== false;
+
+function setMeterFill(element, value) {
+  element.style.transform = `scaleX(${Math.max(0, Math.min(1, value))})`;
+}
+
+function setThemePreview(element, themeId) {
+  const theme = TEAM_THEMES[themeId];
+  element.innerHTML = `
+    <span style="background:${theme.uiPrimary}"></span>
+    <span style="background:${theme.uiSoft}"></span>
+    <span style="background:${theme.uiAccent}"></span>
+  `;
+}
+
+function applyCssTheme(homeThemeId, awayThemeId) {
+  const root = document.documentElement;
+  const home = TEAM_THEMES[homeThemeId];
+  const away = TEAM_THEMES[awayThemeId];
+
+  root.style.setProperty("--home", home.uiPrimary);
+  root.style.setProperty("--home-soft", home.uiSoft);
+  root.style.setProperty("--away", away.uiPrimary);
+  root.style.setProperty("--away-soft", away.uiSoft);
+  root.style.setProperty("--accent", home.uiAccent);
+  root.style.setProperty("--good", away.uiAccent);
+
+  setThemePreview(ui.homeThemePreview, homeThemeId);
+  setThemePreview(ui.awayThemePreview, awayThemeId);
+}
+
+function setAudioState(enabled) {
+  audioEnabled = enabled;
+  audio.setEnabled(enabled);
+  ui.audioStatus.textContent = enabled ? "開啟" : "靜音";
+  ui.audioButton.textContent = enabled ? "音效開啟" : "音效靜音";
+  ui.audioSelect.value = enabled ? "on" : "off";
+  saveSettings({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+    audioEnabled: enabled,
+  });
+}
+
+function syncMenuCards() {
+  for (const button of ui.modeCardGrid.querySelectorAll(".mode-card")) {
+    button.classList.toggle("selected", button.dataset.mode === selectedModeId);
+  }
+
+  const mode = GAME_MODES[selectedModeId];
+  ui.modeDescription.textContent = mode.description;
+  ui.modeMetaTitle.textContent = mode.label;
+  ui.modeMetaGoal.textContent = mode.goal;
+}
+
+function syncMenuControls() {
+  ui.homeThemeSelect.value = selectedHomeThemeId;
+  ui.awayThemeSelect.value = selectedAwayThemeId;
+  ui.menuDifficultySelect.value = selectedDifficulty;
+  applyCssTheme(selectedHomeThemeId, selectedAwayThemeId);
+  syncMenuCards();
+}
+
+function syncGameConfigurationToMenu() {
+  selectedModeId = game.modeId;
+  selectedHomeThemeId = game.homeThemeId;
+  selectedAwayThemeId = game.awayThemeId;
+  selectedDifficulty = game.difficulty;
+  syncMenuControls();
+}
+
+function syncOverlay(overlay) {
+  ui.matchOverlay.classList.toggle("visible", overlay.visible);
+  ui.overlayEyebrow.textContent = overlay.eyebrow;
+  ui.overlayTitle.textContent = overlay.title;
+  ui.overlayText.textContent = overlay.text;
+  ui.resumeButton.hidden = !overlay.canResume;
+}
+
+function openHomeScreen() {
+  game.openHomeMenu();
+  syncGameConfigurationToMenu();
+  ui.homeScreen.classList.add("visible");
+}
+
+function closeHomeScreen() {
+  ui.homeScreen.classList.remove("visible");
+}
+
+function unlockAudio() {
+  audio.unlock();
+}
+
+function handleGameEvent(event) {
+  switch (event.type) {
+    case "match-start":
+      audio.whistle();
+      audio.vibrate(18);
+      break;
+    case "period-start":
+      audio.whistle();
+      audio.announce(event.announce);
+      break;
+    case "period-end":
+      audio.buzzer();
+      audio.vibrate([70, 40, 90]);
+      break;
+    case "score":
+      audio.swish();
+      audio.scoreSting();
+      audio.vibrate([35, 25, 55]);
+      audio.announce(
+        `${event.teamLabel} ${event.points} 分，目前 ${event.homeScore} 比 ${event.awayScore}`,
+      );
+      break;
+    case "steal":
+      audio.steal();
+      audio.vibrate(28);
+      audio.announce(`${event.teamLabel} 成功抄截`);
+      break;
+    case "rebound":
+      audio.rebound();
+      break;
+    case "contact":
+      audio.thud(event.strength);
+      break;
+    case "ball-bounce":
+      audio.thud(event.strength * 0.35);
+      break;
+    case "match-end":
+      audio.horn();
+      audio.vibrate([110, 50, 120]);
+      audio.announce(
+        `${event.winnerLabel} 獲勝。最終比分 ${event.homeScore} 比 ${event.awayScore}`,
+      );
+      break;
+    default:
+      break;
+  }
+}
+
+game.onEvent = handleGameEvent;
+
+game.onHudUpdate = (state) => {
+  ui.homeScore.textContent = String(state.homeScore);
+  ui.awayScore.textContent = String(state.awayScore);
+  ui.homeTeamName.textContent = state.homeLabel;
+  ui.awayTeamName.textContent = state.awayLabel;
+  ui.gameClock.textContent = state.gameClock;
+  ui.shotClock.textContent = state.shotClock;
+  ui.periodLabel.textContent = state.periodCode;
+  ui.modeCode.textContent = state.modeCode;
+  ui.phaseLabel.textContent = state.phaseLabel;
+  ui.statusMessage.textContent = state.message;
+  ui.modeLabel.textContent = state.modeLabel;
+  ui.possessionLabel.textContent = state.possession;
+  ui.controlledLabel.textContent = state.controlled;
+  ui.difficultyLabel.textContent = state.difficulty;
+  ui.homeThemeLabel.textContent = state.homeThemeLabel;
+  ui.awayThemeLabel.textContent = state.awayThemeLabel;
+  ui.shotMeterText.textContent = state.shotMeterText;
+  ui.staminaValue.textContent = `${Math.round(state.stamina * 100)}%`;
+  ui.pauseButton.textContent = state.pauseLabel;
+  ui.shotMeterWindow.style.left = `${state.shotWindowStart * 100}%`;
+  ui.shotMeterWindow.style.width = `${state.shotWindowSize * 100}%`;
+  setMeterFill(ui.shotMeterFill, state.shotMeterValue);
+  setMeterFill(ui.staminaFill, state.stamina);
+  syncOverlay(state.overlay);
+};
+
+for (const [id, theme] of Object.entries(TEAM_THEMES)) {
+  ui.homeThemeSelect.insertAdjacentHTML(
+    "beforeend",
+    `<option value="${id}">${theme.name}</option>`,
+  );
+  ui.awayThemeSelect.insertAdjacentHTML(
+    "beforeend",
+    `<option value="${id}">${theme.name}</option>`,
+  );
+}
+
+syncGameConfigurationToMenu();
+setAudioState(audioEnabled);
+ui.saveStatus.textContent = hasSavedGame() ? "已有存檔" : "尚未存檔";
+
+ui.modeCardGrid.addEventListener("click", (event) => {
+  const button = event.target.closest(".mode-card");
+  if (!button) {
+    return;
+  }
+
+  unlockAudio();
+  audio.uiTap();
+  selectedModeId = button.dataset.mode;
+  syncMenuCards();
+  saveSettings({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+    audioEnabled,
+  });
+});
+
+ui.homeThemeSelect.addEventListener("change", (event) => {
+  selectedHomeThemeId = event.target.value;
+  applyCssTheme(selectedHomeThemeId, selectedAwayThemeId);
+  saveSettings({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+    audioEnabled,
+  });
+});
+
+ui.awayThemeSelect.addEventListener("change", (event) => {
+  selectedAwayThemeId = event.target.value;
+  applyCssTheme(selectedHomeThemeId, selectedAwayThemeId);
+  saveSettings({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+    audioEnabled,
+  });
+});
+
+ui.menuDifficultySelect.addEventListener("change", (event) => {
+  selectedDifficulty = event.target.value;
+  saveSettings({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+    audioEnabled,
+  });
+});
+
+ui.audioSelect.addEventListener("change", (event) => {
+  unlockAudio();
+  audio.uiTap();
+  setAudioState(event.target.value === "on");
+});
+
+ui.startMatchButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  game.applyPresentation({
+    difficulty: selectedDifficulty,
+    modeId: selectedModeId,
+    homeThemeId: selectedHomeThemeId,
+    awayThemeId: selectedAwayThemeId,
+  });
+  game.startSelectedMatch();
+  closeHomeScreen();
+  ui.saveStatus.textContent = "開始新比賽";
+});
+
+function loadIntoUi() {
+  const loaded = game.loadGame();
+  if (loaded) {
+    syncGameConfigurationToMenu();
+    closeHomeScreen();
+  }
+  ui.saveStatus.textContent = loaded ? "已讀取存檔" : "沒有可讀取的存檔";
+}
+
+ui.continueSavedButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  loadIntoUi();
+});
+
+ui.loadButton.addEventListener("click", loadIntoUi);
+ui.overlayLoadButton.addEventListener("click", loadIntoUi);
+
+ui.menuButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  openHomeScreen();
+});
+
+ui.overlayMenuButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  openHomeScreen();
+});
+
+ui.saveButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  game.saveGame();
+  ui.saveStatus.textContent = "已手動存檔";
+});
+
+ui.audioButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  setAudioState(!audioEnabled);
+});
+
+ui.pauseButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  game.togglePause();
+});
+
+ui.resumeButton.addEventListener("click", () => {
+  unlockAudio();
+  audio.uiTap();
+  game.resume();
+});
+
+window.addEventListener("pointerdown", unlockAudio, { passive: true });
+window.addEventListener("keydown", unlockAudio, { passive: true });
+
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  ui.installButton.hidden = false;
+  ui.installHint.textContent = "已偵測到可安裝版本，點一下就能加入主畫面。";
+});
+
+ui.installButton.addEventListener("click", async () => {
+  unlockAudio();
+  audio.uiTap();
+  if (!deferredInstallPrompt) {
+    ui.installHint.textContent = "如果是 iPhone，請用分享選單的「加入主畫面」。";
+    return;
+  }
+
+  deferredInstallPrompt.prompt();
+  const outcome = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  ui.installButton.hidden = true;
+  ui.installHint.textContent =
+    outcome.outcome === "accepted" ? "安裝要求已送出。" : "你可以之後再安裝。";
+});
+
+window.addEventListener("appinstalled", () => {
+  ui.installButton.hidden = true;
+  ui.installHint.textContent = "已安裝到裝置。";
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    game.saveGame(true);
+  }
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      ui.installHint.textContent = "Service Worker 註冊失敗，但仍可直接遊玩。";
+    });
+  });
+}
+
+game.start();
