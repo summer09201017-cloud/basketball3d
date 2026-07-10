@@ -256,6 +256,13 @@ button {
 select {
   width: 100%;
   padding: 0.85rem 1rem;
+  color-scheme: dark; /* Windows 展開選單跟深色主題走 */
+}
+
+/* 07-11 使用者回報:展開的下拉選單在 Windows 是系統白底,白字隱形——option 明定深底亮字 */
+select option {
+  background: #101b2b;
+  color: #f2f6fb;
 }
 
 .button-row,
