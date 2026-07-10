@@ -750,7 +750,7 @@ export class BasketballGame {
       new THREE.TorusGeometry(RIM_RADIUS, 0.04, 14, 34),
       new THREE.MeshStandardMaterial({ color: 0xff6d28, roughness: 0.46 }),
     );
-    rim.rotation.y = Math.PI / 2;
+    rim.rotation.x = Math.PI / 2; // 框面水平、圈口朝上(07-10 使用者點名:原本繞 Y 轉是直立圈)
     rim.position.set(rimX, RIM_HEIGHT, 0);
     group.add(rim);
 
