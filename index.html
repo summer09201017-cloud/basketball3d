@@ -47,6 +47,7 @@
       <button id="pauseButton" class="pause-fab">暫停</button>
 
       <div class="message-ribbon" id="statusMessage">選擇模式後開始比賽。</div>
+      <div class="commentary-bar" id="commentaryBar" hidden></div>
 
       <aside class="side-panel">
         <div class="panel-block hero-panel">
@@ -212,6 +213,8 @@
               <p class="eyebrow">比賽設定</p>
               <label class="field-label" for="menuDifficultySelect">AI 強度</label>
               <select id="menuDifficultySelect">
+                <option value="kids">幼兒（超簡單）</option>
+                <option value="child">兒童（簡單）</option>
                 <option value="easy">入門</option>
                 <option value="normal">標準</option>
                 <option value="hard">職業</option>

@@ -689,3 +689,37 @@ button.active {
     border-radius: 1.2rem;
   }
 }
+
+
+/* 中文播報字幕條(2026-07-10):事件播報,語音同步唸;每次更新重播 pop 動畫 */
+.commentary-bar {
+  position: fixed;
+  left: 50%;
+  top: 72px;
+  transform: translateX(-50%);
+  max-width: min(86vw, 640px);
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.82);
+  border: 1px solid var(--accent, #f6df81);
+  color: #f5f8ff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  z-index: 40;
+  animation: commentary-pop 3.2s ease forwards;
+}
+.commentary-bar[data-tone="hot"] { border-color: #ff7a18; color: #ffd6aa; }
+.commentary-bar[data-tone="cool"] { border-color: #38a9ff; color: #cfe9ff; }
+@keyframes commentary-pop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.94); }
+  8% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.02); }
+  14% { transform: translateX(-50%) scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (max-width: 720px) {
+  .commentary-bar { top: 58px; font-size: 14px; padding: 6px 14px; }
+}

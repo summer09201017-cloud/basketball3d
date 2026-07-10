@@ -60,6 +60,7 @@ const ui = {
   modeMetaTitle: document.querySelector("#modeMetaTitle"),
   modeMetaGoal: document.querySelector("#modeMetaGoal"),
   startMatchButton: document.querySelector("#startMatchButton"),
+  commentaryBar: document.querySelector("#commentaryBar"),
   continueSavedButton: document.querySelector("#continueSavedButton"),
 };
 
@@ -171,49 +172,116 @@ function unlockAudio() {
   audio.unlock();
 }
 
+// —— 中文播報(2026-07-10 使用者點名):畫面字幕條+語音同步唸 ——
+// 詞庫隨機挑句,依比分情境加「反超/追平/拉開」;字幕條每次更新重播 pop 動畫。
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+let lastLeadSign = 0; // 上一次的比分差正負(判斷反超/追平)
+
+function pushCommentary(text, tone = "info") {
+  const bar = ui.commentaryBar;
+  if (!bar || !text) return;
+  bar.hidden = false;
+  bar.dataset.tone = tone;
+  bar.textContent = text;
+  // 重播動畫
+  bar.style.animation = "none";
+  void bar.offsetWidth;
+  bar.style.animation = "";
+}
+
+function scoreCommentary(event) {
+  const t = event.teamLabel;
+  const base = event.points === 3
+    ? pick([
+        `三分線外開火——唰!${t} 三分命中!`,
+        `好深的三分!${t} 手感發燙!`,
+        `${t} 冷靜出手,三分球應聲入網!`,
+      ])
+    : pick([
+        `${t} 切入上籃得手!`,
+        `${t} 中距離跳投,穩穩命中!`,
+        `漂亮的配合,${t} 輕鬆拿下 2 分!`,
+      ]);
+  const diff = event.homeScore - event.awayScore;
+  const sign = Math.sign(diff);
+  let tail = "";
+  if (sign === 0) tail = `雙方 ${event.homeScore} 平,戰成拉鋸!`;
+  else if (lastLeadSign !== 0 && sign !== lastLeadSign) tail = `${t} 反超了!${event.homeScore} 比 ${event.awayScore}!`;
+  else if (Math.abs(diff) >= 10) tail = `分差拉開到 ${Math.abs(diff)} 分,${event.homeScore} 比 ${event.awayScore}。`;
+  else tail = `${event.homeScore} 比 ${event.awayScore}。`;
+  lastLeadSign = sign;
+  return `${base} ${tail}`;
+}
+
 function handleGameEvent(event) {
   switch (event.type) {
-    case "match-start":
+    case "match-start": {
       audio.whistle();
       audio.vibrate(18);
+      lastLeadSign = 0;
+      const line = pick(["比賽開始!雙方跳球爭搶!", "哨聲響起,全場對決開打!", "球員就位——比賽開始!"]);
+      pushCommentary(line);
+      audio.announce(line);
       break;
+    }
     case "period-start":
       audio.whistle();
+      if (event.announce) pushCommentary(event.announce);
       audio.announce(event.announce);
       break;
-    case "period-end":
+    case "period-end": {
       audio.buzzer();
       audio.vibrate([70, 40, 90]);
+      const line = `${event.period || "本節"}結束!`;
+      pushCommentary(line);
+      audio.announce(line);
       break;
-    case "score":
+    }
+    case "score": {
       audio.swish();
       audio.scoreSting();
       audio.vibrate([35, 25, 55]);
-      audio.announce(
-        `${event.teamLabel} ${event.points} 分，目前 ${event.homeScore} 比 ${event.awayScore}`,
-      );
+      const line = scoreCommentary(event);
+      pushCommentary(line, event.team === "home" ? "hot" : "cool");
+      audio.announce(line);
       break;
-    case "steal":
+    }
+    case "steal": {
       audio.steal();
       audio.vibrate(28);
-      audio.announce(`${event.teamLabel} 成功抄截`);
+      const line = pick([
+        `漂亮的抄截!${event.teamLabel} 打出反擊!`,
+        `${event.teamLabel} 眼明手快,把球抄走了!`,
+        `一個閃神——${event.teamLabel} 抄截成功!`,
+      ]);
+      pushCommentary(line, event.team === "home" ? "hot" : "cool");
+      audio.announce(line);
       break;
-    case "rebound":
+    }
+    case "rebound": {
       audio.rebound();
+      const line = pick([
+        `${event.teamLabel} 搶下籃板!`,
+        `籃板球是 ${event.teamLabel} 的!`,
+        `卡好位置,${event.teamLabel} 保護住籃板。`,
+      ]);
+      pushCommentary(line, event.team === "home" ? "hot" : "cool");
       break;
+    }
     case "contact":
       audio.thud(event.strength);
       break;
     case "ball-bounce":
       audio.thud(event.strength * 0.35);
       break;
-    case "match-end":
+    case "match-end": {
       audio.horn();
       audio.vibrate([110, 50, 120]);
-      audio.announce(
-        `${event.winnerLabel} 獲勝。最終比分 ${event.homeScore} 比 ${event.awayScore}`,
-      );
+      const line = `終場哨響!${event.winnerLabel} 獲勝,最終比分 ${event.homeScore} 比 ${event.awayScore}!`;
+      pushCommentary(line, event.winnerTeam === "home" ? "hot" : "cool");
+      audio.announce(line);
       break;
+    }
     default:
       break;
   }

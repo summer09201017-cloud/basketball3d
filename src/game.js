@@ -8,6 +8,8 @@ import {
 } from "./storage.js";
 
 export const DIFFICULTY_LABELS = {
+  kids: "幼兒",
+  child: "兒童",
   easy: "入門",
   normal: "標準",
   hard: "職業",
@@ -101,7 +103,25 @@ export const TEAM_THEMES = {
   },
 };
 
+// 年齡難度檔(2026-07-10 使用者點名):幼兒/兒童 在入門之下——AI 更慢更手軟、玩家輔助更高、
+// 投籃時機窗更寬(shotWindow=綠區倍率,HUD 與命中判定同步吃);青少年以上直接玩入門~職業。
 const DIFFICULTY_PRESETS = {
+  kids: {
+    aiMove: 0.55,
+    aiDefense: 0.5,
+    aiShoot: 0.52,
+    aiDecision: 0.58,
+    userAssist: 1.5,
+    shotWindow: 2.1,
+  },
+  child: {
+    aiMove: 0.7,
+    aiDefense: 0.66,
+    aiShoot: 0.66,
+    aiDecision: 0.72,
+    userAssist: 1.3,
+    shotWindow: 1.55,
+  },
   easy: {
     aiMove: 0.84,
     aiDefense: 0.82,
@@ -1575,8 +1595,9 @@ export class BasketballGame {
     const staminaBoost = THREE.MathUtils.lerp(0.8, 1.08, shooter.stamina);
     const shotBase = shooter.shoot * openness * (1 - rangePenalty);
     const finishingBoost = distance < 3.2 ? shooter.finish * 0.18 : 0;
+    const windowScale = difficulty.shotWindow || 1;
     const timingError = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const timingBoost = isUserShot ? clamp(1.2 - timingError / 0.18, 0.72, 1.2) : 1;
+    const timingBoost = isUserShot ? clamp(1.2 - timingError / (0.18 * windowScale), 0.72, 1.2) : 1;
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
       (shotBase + finishingBoost) * userAssist * timingBoost * staminaBoost,
@@ -2305,8 +2326,8 @@ export class BasketballGame {
       stamina: controlled ? controlled.stamina : 1,
       shotMeterValue: this.userShotMeter.active ? this.userShotMeter.value : 0,
       shotMeterText: this.getShotMeterText(),
-      shotWindowStart: SHOT_WINDOW_START,
-      shotWindowSize: SHOT_WINDOW_SIZE,
+      shotWindowStart: SHOT_WINDOW_CENTER - (SHOT_WINDOW_SIZE * (this.difficultyPreset.shotWindow || 1)) / 2,
+      shotWindowSize: SHOT_WINDOW_SIZE * (this.difficultyPreset.shotWindow || 1),
       pauseLabel: this.phase === "paused" ? "繼續" : "暫停",
       homeLabel: this.getTeamLabel("home"),
       awayLabel: this.getTeamLabel("away"),
