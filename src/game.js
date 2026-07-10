@@ -681,6 +681,7 @@ export class BasketballGame {
     if (courtMode === "half" || courtMode === "full") {
       this.courtMode = courtMode;
     }
+    this.syncCourtVisuals();
     if (Number.isFinite(targetScore)) {
       this.targetScore = clamp(Math.round(targetScore), 5, 99);
     }
@@ -768,6 +769,7 @@ export class BasketballGame {
 
     this.hoops.home = this.createHoop(-1);
     this.hoops.away = this.createHoop(1);
+    this.syncCourtVisuals();
 
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_RADIUS, 24, 24),
@@ -1992,6 +1994,11 @@ export class BasketballGame {
     }
   }
 
+  // 半場模式:右半場那個用不到的籃框藏起來,畫面乾淨(07-11 使用者拍板)
+  syncCourtVisuals() {
+    if (this.hoops?.away?.group) this.hoops.away.group.visible = this.courtMode !== "half";
+  }
+
   effectiveTargetScore() {
     if (this.modeId === "raceto") return this.targetScore || this.mode.targetScore;
     return this.mode.targetScore;
@@ -2167,7 +2174,20 @@ export class BasketballGame {
     const fz = this.pointer.cameraFocus.z;
     const depth = 18.7 + Math.abs(fz) * 0.18;
     let desiredPosition, desiredLook;
-    if (this.cameraView === 1) {
+    if (this.courtMode === "half") {
+      // 半場特寫(07-11 使用者拍板):鏡頭只框左半場,球員放大約一倍;微跟焦點不甩鏡
+      const hx = -6.5 + fx * 0.2;
+      if (this.cameraView === 1) {
+        desiredPosition = new THREE.Vector3(hx, 13, -(13 + Math.abs(fz) * 0.15));
+        desiredLook = new THREE.Vector3(hx - 1.6, 0.4, fz);
+      } else if (this.cameraView === 2) {
+        desiredPosition = new THREE.Vector3(-6.5, 20, fz + 2.6);
+        desiredLook = new THREE.Vector3(-6.5, 0, fz);
+      } else {
+        desiredPosition = new THREE.Vector3(hx, 13, 13 + Math.abs(fz) * 0.15);
+        desiredLook = new THREE.Vector3(hx + 1.6, 0.4, fz);
+      }
+    } else if (this.cameraView === 1) {
       // 180° 對面斜側(換邊進攻時看得順)
       desiredPosition = new THREE.Vector3(fx + 6.8, 18.2, -depth);
       desiredLook = new THREE.Vector3(fx - 5.4, 0.4, fz);
@@ -2358,6 +2378,7 @@ export class BasketballGame {
     this.courtMode = snapshot.courtMode === "half" ? "half" : "full";
     this.targetScore = clamp(Number(snapshot.targetScore) || this.targetScore || 21, 5, 99);
     if (this.players.length !== this.teamSize * 2) this.createTeams();
+    this.syncCourtVisuals();
     this.applyThemeSelections();
     this.savePresentationSettings();
 
