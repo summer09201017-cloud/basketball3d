@@ -196,6 +196,10 @@
                   <strong>搶 21</strong>
                   <span>先到 21 且至少領先 2 分</span>
                 </button>
+                <button class="mode-card" data-mode="raceto">
+                  <strong>搶分賽（無計時）</strong>
+                  <span>先到目標分就贏・配半場＝街頭鬥牛</span>
+                </button>
               </div>
               <p id="modeDescription" class="mode-description"></p>
             </section>
@@ -221,6 +225,9 @@
                 <option value="normal">標準</option>
                 <option value="hard">職業</option>
               </select>
+
+              <label class="field-label" for="targetScoreInput" id="targetScoreLabel" hidden>搶分目標（分）</label>
+              <input type="number" id="targetScoreInput" min="5" max="99" value="21" hidden />
 
               <label class="field-label" for="teamSizeSelect">每隊人數</label>
               <select id="teamSizeSelect">

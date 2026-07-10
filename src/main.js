@@ -59,6 +59,8 @@ const ui = {
   awayThemePreview: document.querySelector("#awayThemePreview"),
   menuDifficultySelect: document.querySelector("#menuDifficultySelect"),
   teamSizeSelect: document.querySelector("#teamSizeSelect"),
+  targetScoreInput: document.querySelector("#targetScoreInput"),
+  targetScoreLabel: document.querySelector("#targetScoreLabel"),
   courtModeSelect: document.querySelector("#courtModeSelect"),
   audioSelect: document.querySelector("#audioSelect"),
   modeMetaTitle: document.querySelector("#modeMetaTitle"),
@@ -83,6 +85,7 @@ let selectedHomeThemeId = game.homeThemeId;
 let selectedAwayThemeId = game.awayThemeId;
 let selectedDifficulty = game.difficulty;
 let selectedTeamSize = game.teamSize;
+let selectedTargetScore = game.targetScore;
 let selectedCourtMode = game.courtMode;
 let audioEnabled = settings.audioEnabled !== false;
 
@@ -147,6 +150,10 @@ function syncMenuControls() {
   ui.awayThemeSelect.value = selectedAwayThemeId;
   ui.menuDifficultySelect.value = selectedDifficulty;
   ui.teamSizeSelect.value = String(selectedTeamSize);
+  ui.targetScoreInput.value = String(selectedTargetScore);
+  const isRace = selectedModeId === "raceto";
+  ui.targetScoreInput.hidden = !isRace;
+  ui.targetScoreLabel.hidden = !isRace;
   ui.courtModeSelect.value = selectedCourtMode;
   applyCssTheme(selectedHomeThemeId, selectedAwayThemeId);
   syncMenuCards();
@@ -159,6 +166,7 @@ function syncGameConfigurationToMenu() {
   selectedDifficulty = game.difficulty;
   selectedTeamSize = game.teamSize;
   selectedCourtMode = game.courtMode;
+  selectedTargetScore = game.targetScore;
   syncMenuControls();
 }
 
@@ -355,6 +363,9 @@ ui.modeCardGrid.addEventListener("click", (event) => {
   audio.uiTap();
   selectedModeId = button.dataset.mode;
   syncMenuCards();
+  const isRace = selectedModeId === "raceto";
+  ui.targetScoreInput.hidden = !isRace;
+  ui.targetScoreLabel.hidden = !isRace;
   saveSettings({
     difficulty: selectedDifficulty,
     modeId: selectedModeId,
@@ -399,6 +410,11 @@ ui.menuDifficultySelect.addEventListener("change", (event) => {
   });
 });
 
+ui.targetScoreInput.addEventListener("change", (event) => {
+  selectedTargetScore = Math.max(5, Math.min(99, Math.round(Number(event.target.value) || 21)));
+  event.target.value = String(selectedTargetScore);
+});
+
 ui.teamSizeSelect.addEventListener("change", (event) => {
   selectedTeamSize = Number(event.target.value);
 });
@@ -423,6 +439,7 @@ ui.startMatchButton.addEventListener("click", () => {
     awayThemeId: selectedAwayThemeId,
     teamSize: selectedTeamSize,
     courtMode: selectedCourtMode,
+    targetScore: selectedTargetScore,
   });
   game.startSelectedMatch();
   closeHomeScreen();

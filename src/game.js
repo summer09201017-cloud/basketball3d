@@ -40,6 +40,21 @@ export const GAME_MODES = {
     shotClock: 14,
     startScore: { home: 38, away: 38 },
   },
+  raceto: {
+    id: "raceto",
+    label: "搶分賽",
+    short: "RACE",
+    description: "無計時輕鬆賽——先搶到目標分就贏,目標分可自訂;配「半場」就是街頭鬥牛。",
+    goal: "先達到目標分即獲勝,沒有時間壓力。",
+    regulationPeriods: 1,
+    quarterDuration: 0,
+    overtimeDuration: 30,
+    untimed: true,
+    shotClock: 18,
+    startScore: { home: 0, away: 0 },
+    targetScore: 21,
+    winBy: 1,
+  },
   race21: {
     id: "race21",
     label: "搶 21",
@@ -527,6 +542,7 @@ export class BasketballGame {
     this.mode = getModeConfig(this.modeId);
     this.teamSize = [3, 4, 5].includes(settings.teamSize) ? settings.teamSize : 5;
     this.courtMode = settings.courtMode === "half" ? "half" : "full";
+    this.targetScore = clamp(Number(settings.targetScore) || 21, 5, 99);
 
     this.input = new InputManager();
     this.input.bindTouchButtons(this.touchRoot);
@@ -623,6 +639,7 @@ export class BasketballGame {
       awayThemeId: this.awayThemeId,
       teamSize: this.teamSize,
       courtMode: this.courtMode,
+      targetScore: this.targetScore,
     });
   }
 
@@ -656,13 +673,16 @@ export class BasketballGame {
     this.pushHud();
   }
 
-  applyPresentation({ difficulty, modeId, homeThemeId, awayThemeId, teamSize, courtMode }) {
+  applyPresentation({ difficulty, modeId, homeThemeId, awayThemeId, teamSize, courtMode, targetScore }) {
     if ([3, 4, 5].includes(teamSize) && teamSize !== this.teamSize) {
       this.teamSize = teamSize;
       this.createTeams();
     }
     if (courtMode === "half" || courtMode === "full") {
       this.courtMode = courtMode;
+    }
+    if (Number.isFinite(targetScore)) {
+      this.targetScore = clamp(Math.round(targetScore), 5, 99);
     }
     if (difficulty && DIFFICULTY_PRESETS[difficulty]) {
       this.difficulty = difficulty;
@@ -931,6 +951,9 @@ export class BasketballGame {
     if (this.modeId === "clutch" || this.modeId === "race21") {
       return this.mode.short;
     }
+    if (this.modeId === "raceto") {
+      return `${this.effectiveTargetScore()}PT`;
+    }
     return `Q${this.periodNumber}`;
   }
 
@@ -943,6 +966,9 @@ export class BasketballGame {
     }
     if (this.modeId === "race21") {
       return "搶 21";
+    }
+    if (this.modeId === "raceto") {
+      return `搶 ${this.effectiveTargetScore()} 分`;
     }
     return `第 ${this.periodNumber} 節`;
   }
@@ -1189,7 +1215,7 @@ export class BasketballGame {
           this.resolveLooseBall();
         }
 
-        if (this.periodClock === 0 && this.phase === "live") {
+        if (this.periodClock === 0 && this.phase === "live" && !this.mode.untimed) {
           this.handlePeriodExpired();
         }
       }
@@ -1966,14 +1992,20 @@ export class BasketballGame {
     }
   }
 
+  effectiveTargetScore() {
+    if (this.modeId === "raceto") return this.targetScore || this.mode.targetScore;
+    return this.mode.targetScore;
+  }
+
   checkTargetScoreWin(team) {
-    if (!this.mode.targetScore) {
+    const target = this.effectiveTargetScore();
+    if (!target) {
       return false;
     }
 
     const otherTeam = team === "home" ? "away" : "home";
     return (
-      this.score[team] >= this.mode.targetScore &&
+      this.score[team] >= target &&
       this.score[team] - this.score[otherTeam] >= (this.mode.winBy || 1)
     );
   }
@@ -2003,7 +2035,7 @@ export class BasketballGame {
       return;
     }
 
-    if (this.periodClock === 0) {
+    if (this.periodClock === 0 && !this.mode.untimed) {
       this.handlePeriodExpired();
       return;
     }
@@ -2255,6 +2287,7 @@ export class BasketballGame {
       cameraView: this.cameraView,
       teamSize: this.teamSize,
       courtMode: this.courtMode,
+      targetScore: this.targetScore,
       difficulty: this.difficulty,
       modeId: this.modeId,
       homeThemeId: this.homeThemeId,
@@ -2323,6 +2356,7 @@ export class BasketballGame {
     this.cameraView = [0, 1, 2].includes(snapshot.cameraView) ? snapshot.cameraView : 0;
     this.teamSize = [3, 4, 5].includes(snapshot.teamSize) ? snapshot.teamSize : 5;
     this.courtMode = snapshot.courtMode === "half" ? "half" : "full";
+    this.targetScore = clamp(Number(snapshot.targetScore) || this.targetScore || 21, 5, 99);
     if (this.players.length !== this.teamSize * 2) this.createTeams();
     this.applyThemeSelections();
     this.savePresentationSettings();
@@ -2441,7 +2475,7 @@ export class BasketballGame {
     this.onHudUpdate({
       homeScore: this.score.home,
       awayScore: this.score.away,
-      gameClock: formatClock(this.periodClock),
+      gameClock: this.mode.untimed ? "∞" : formatClock(this.periodClock),
       shotClock:
         this.deadBallTimer > 0 || this.phase === "break" || this.phase === "menu"
           ? "--"
