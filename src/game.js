@@ -171,6 +171,9 @@ const RIM_RADIUS = 0.42;
 const BALL_RADIUS = 0.24;
 const PLAYER_RADIUS = 0.43;
 const BASE_RUN_SPEED = 4.15;
+// 界外線=地板貼圖的白線位置(貼圖 margin 80/2048 換算):踩出線=帶球出界
+const OOB_X = 12.9;
+const OOB_Z = 6.33;
 const SHOT_WINDOW_START = 0.7;
 const SHOT_WINDOW_SIZE = 0.14;
 const SHOT_WINDOW_CENTER = SHOT_WINDOW_START + SHOT_WINDOW_SIZE / 2;
@@ -852,6 +855,9 @@ export class BasketballGame {
           velocity: new THREE.Vector3(),
           heading: team === "home" ? Math.PI / 2 : -Math.PI / 2,
           cooldown: 0,
+          jumpT: 0,
+          jumpDur: 1,
+          jumpH: 0,
           decisionTimer: randomBetween(0.15, 0.5),
           animationTime: randomBetween(0, Math.PI * 2),
           visuals,
@@ -1216,6 +1222,7 @@ export class BasketballGame {
           this.handleUserControl(delta);
           this.updateAI(delta);
           this.updateFreeThrow(delta);
+          this.checkDribbleOutOfBounds();
           this.updateStamina(delta);
           this.updatePlayers(delta);
           this.updateBall(delta);
@@ -1332,6 +1339,9 @@ export class BasketballGame {
     if (canUserShoot) {
       if (this.input.isDown("shoot")) {
         this.advanceShotMeter(delta, owner.id);
+        // 蓄力中臉朝籃框(07-11 使用者點名)
+        const hoopAim = this.getTargetHoopForTeam(player.team).rimCenter;
+        player.heading = Math.atan2(hoopAim.x - player.position.x, hoopAim.z - player.position.z);
       } else if (this.userShotMeter.active && this.input.consumeRelease("shoot")) {
         const meterValue = this.userShotMeter.value;
         this.cancelShotMeter();
@@ -1735,6 +1745,13 @@ export class BasketballGame {
 
     const duration = isDunk ? 0.42 : clamp(distance / 10.5, 0.88, 1.34);
 
+    // 投籃臉朝框(07-11 使用者點名):出手瞬間強制面向籃框
+    shooter.heading = Math.atan2(targetHoop.x - shooter.position.x, targetHoop.z - shooter.position.z);
+    // 出手起跳(07-11 使用者點名:灌籃要看得到跳起來;跳投也跳)
+    shooter.jumpDur = isDunk ? 0.62 : 0.55;
+    shooter.jumpT = shooter.jumpDur;
+    shooter.jumpH = isDunk ? 1.15 : 0.55;
+
     // 犯規:防守者貼身(<0.95m)干擾出手,有機率吹哨→罰球兩次(一直貼防就會送罰球)
     if (!this.freeThrow && nearestDefender.distance < 0.95 && Math.random() < 0.24) {
       this.startFreeThrows(shooter, 2, isDunk);
@@ -1828,6 +1845,22 @@ export class BasketballGame {
     }
   }
 
+  // 帶球出界(07-11 使用者點名):持球者踩出邊線=吹哨,對方邊線發球(半場模式含中線)
+  checkDribbleOutOfBounds() {
+    if (this.deadBallTimer > 0 || this.freeThrow) return;
+    const owner = this.getBallOwner();
+    if (!owner) return;
+    const halfLineOut = this.courtMode === "half" && owner.position.x > 0.45;
+    if (Math.abs(owner.position.x) > OOB_X || Math.abs(owner.position.z) > OOB_Z || halfLineOut) {
+      // 拉回界內一步,避免發球又立刻出界
+      owner.position.x = clamp(owner.position.x, -OOB_X + 0.3, (this.courtMode === "half" ? 0.3 : OOB_X - 0.3));
+      owner.position.z = clamp(owner.position.z, -OOB_Z + 0.3, OOB_Z - 0.3);
+      const other = owner.team === "home" ? "away" : "home";
+      this.emitEvent("out-of-bounds", { teamLabel: this.getTeamLabel(owner.team) });
+      this.deadBallTo(other, "帶球出界！對方邊線發球。", 0.9);
+    }
+  }
+
   // ── 罰球(07-11 使用者點名:犯規罰兩球,每球 1 分)──
   startFreeThrows(shooter, count, wasDunk) {
     this.freeThrow = { shooterId: shooter.id, remaining: count, timer: 1.5, total: count };
@@ -1841,6 +1874,7 @@ export class BasketballGame {
     const spotX = hoop.x + (hoop.x < 0 ? 4.6 : -4.6);
     shooter.position.set(spotX, 0, 0);
     shooter.velocity.set(0, 0, 0);
+    shooter.heading = Math.atan2(hoop.x - spotX, hoop.z - 0); // 罰球臉朝框(07-11 使用者點名)
     for (const p of this.players) {
       if (p.id === shooter.id) continue;
       const away = Math.sign(spotX - hoop.x) || 1;
@@ -1866,6 +1900,8 @@ export class BasketballGame {
     const prob = shooter.team === "home" ? 0.82 : clamp(0.45 + 0.4 * difficulty.aiShoot, 0.5, 0.85);
     const willScore = Math.random() < prob;
     const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
+    shooter.heading = Math.atan2(hoop.x - shooter.position.x, hoop.z - shooter.position.z);
+    shooter.jumpDur = 0.4; shooter.jumpT = 0.4; shooter.jumpH = 0.28; // 罰球小跳
     const release = shooter.position.clone(); release.y = 1.6;
     const aim = hoop.clone();
     aim.x += willScore ? randomSigned(0.06) : randomSigned(0.4);
@@ -2397,6 +2433,11 @@ export class BasketballGame {
 
     for (const player of this.players) {
       player.group.position.copy(player.position);
+      if (player.jumpT > 0) {
+        player.jumpT = Math.max(0, player.jumpT - delta);
+        const k = 1 - player.jumpT / player.jumpDur;
+        player.group.position.y += Math.sin(k * Math.PI) * player.jumpH;
+      }
       player.group.rotation.y = player.heading;
       player.selectionRing.visible = controlled?.id === player.id;
       player.possessionRing.visible = owner?.id === player.id;

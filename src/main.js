@@ -295,6 +295,11 @@ function handleGameEvent(event) {
       pushCommentary(line.sub, event.team === "home" ? "hot" : "cool", line.say);
       break;
     }
+    case "out-of-bounds": {
+      audio.whistle();
+      pushCommentary(`${event.teamLabel} 帶球出界,交換球權!`, "info", "");
+      break;
+    }
     case "foul": {
       audio.whistle();
       audio.vibrate([40, 30, 40]);
