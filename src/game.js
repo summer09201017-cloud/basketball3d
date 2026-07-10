@@ -525,6 +525,8 @@ export class BasketballGame {
     this.homeThemeId = TEAM_THEMES[settings.homeThemeId] ? settings.homeThemeId : "ember";
     this.awayThemeId = TEAM_THEMES[settings.awayThemeId] ? settings.awayThemeId : "tide";
     this.mode = getModeConfig(this.modeId);
+    this.teamSize = [3, 4, 5].includes(settings.teamSize) ? settings.teamSize : 5;
+    this.courtMode = settings.courtMode === "half" ? "half" : "full";
 
     this.input = new InputManager();
     this.input.bindTouchButtons(this.touchRoot);
@@ -619,6 +621,8 @@ export class BasketballGame {
       modeId: this.modeId,
       homeThemeId: this.homeThemeId,
       awayThemeId: this.awayThemeId,
+      teamSize: this.teamSize,
+      courtMode: this.courtMode,
     });
   }
 
@@ -652,7 +656,14 @@ export class BasketballGame {
     this.pushHud();
   }
 
-  applyPresentation({ difficulty, modeId, homeThemeId, awayThemeId }) {
+  applyPresentation({ difficulty, modeId, homeThemeId, awayThemeId, teamSize, courtMode }) {
+    if ([3, 4, 5].includes(teamSize) && teamSize !== this.teamSize) {
+      this.teamSize = teamSize;
+      this.createTeams();
+    }
+    if (courtMode === "half" || courtMode === "full") {
+      this.courtMode = courtMode;
+    }
     if (difficulty && DIFFICULTY_PRESETS[difficulty]) {
       this.difficulty = difficulty;
     }
@@ -796,13 +807,14 @@ export class BasketballGame {
   }
 
   createTeams() {
+    for (const player of this.players) this.scene.remove(player.group); // 換人數重建,舊 mesh 要收走
     this.players.length = 0;
 
     for (const team of ["home", "away"]) {
       const lineup = team === "home" ? HOME_LINEUP : AWAY_LINEUP;
       const theme = getThemeConfig(team === "home" ? this.homeThemeId : this.awayThemeId);
 
-      for (let roleIndex = 0; roleIndex < 5; roleIndex += 1) {
+      for (let roleIndex = 0; roleIndex < this.teamSize; roleIndex += 1) {
         const visuals = createPlayerMesh(theme);
         const player = {
           id: `${team}-${roleIndex}`,
@@ -898,14 +910,17 @@ export class BasketballGame {
   }
 
   getTargetHoopForTeam(team) {
+    if (this.courtMode === "half") return this.hoops.home; // 半場:共攻同一框
     return team === "home" ? this.hoops.away : this.hoops.home;
   }
 
   getOwnHoop(team) {
+    if (this.courtMode === "half") return this.hoops.home;
     return team === "home" ? this.hoops.home : this.hoops.away;
   }
 
   getAttackDirection(team) {
+    if (this.courtMode === "half") return -1;
     return team === "home" ? 1 : -1;
   }
 
@@ -1023,8 +1038,9 @@ export class BasketballGame {
     this.cancelShotMeter();
 
     const attackDirection = this.getAttackDirection(team);
-    const offenseStartX = attackDirection === 1 ? -10.2 : 10.2;
-    const defenseAnchorX = attackDirection === 1 ? -1.8 : 1.8;
+    const half = this.courtMode === "half";
+    const offenseStartX = half ? -0.8 : attackDirection === 1 ? -10.2 : 10.2;
+    const defenseAnchorX = half ? -6 : attackDirection === 1 ? -1.8 : 1.8;
 
     for (const player of this.getTeamPlayers(team)) {
       const template = OFFENSE_SPOTS[player.roleIndex];
@@ -1860,7 +1876,7 @@ export class BasketballGame {
   updatePlayers(delta) {
     for (const player of this.players) {
       player.position.addScaledVector(player.velocity, delta);
-      player.position.x = clamp(player.position.x, -13.2, 13.2);
+      player.position.x = clamp(player.position.x, -13.2, this.courtMode === "half" ? 0.6 : 13.2);
       player.position.z = clamp(player.position.z, -6.8, 6.8);
       player.velocity.multiplyScalar(player.velocity.lengthSq() < 0.002 ? 0 : 0.96);
 
@@ -1872,7 +1888,7 @@ export class BasketballGame {
     this.resolvePlayerCollisions();
 
     for (const player of this.players) {
-      player.position.x = clamp(player.position.x, -13.2, 13.2);
+      player.position.x = clamp(player.position.x, -13.2, this.courtMode === "half" ? 0.6 : 13.2);
       player.position.z = clamp(player.position.z, -6.8, 6.8);
     }
   }
@@ -2237,6 +2253,8 @@ export class BasketballGame {
     const snapshot = {
       version: 3,
       cameraView: this.cameraView,
+      teamSize: this.teamSize,
+      courtMode: this.courtMode,
       difficulty: this.difficulty,
       modeId: this.modeId,
       homeThemeId: this.homeThemeId,
@@ -2303,6 +2321,9 @@ export class BasketballGame {
       : this.awayThemeId;
     this.mode = getModeConfig(this.modeId);
     this.cameraView = [0, 1, 2].includes(snapshot.cameraView) ? snapshot.cameraView : 0;
+    this.teamSize = [3, 4, 5].includes(snapshot.teamSize) ? snapshot.teamSize : 5;
+    this.courtMode = snapshot.courtMode === "half" ? "half" : "full";
+    if (this.players.length !== this.teamSize * 2) this.createTeams();
     this.applyThemeSelections();
     this.savePresentationSettings();
 
@@ -2426,8 +2447,8 @@ export class BasketballGame {
           ? "--"
           : String(Math.max(0, Math.ceil(this.shotClock))),
       periodCode: this.getPeriodCode(),
-      modeCode: this.mode.short,
-      modeLabel: this.mode.label,
+      modeCode: this.mode.short === "5V5" ? `${this.teamSize}V${this.teamSize}` : this.mode.short,
+      modeLabel: `${this.mode.label}${this.courtMode === "half" ? "・半場" : ""}`,
       phaseLabel: this.getPhaseLabel(),
       message: this.message,
       possession: this.getTeamLabel(this.possessionTeam),

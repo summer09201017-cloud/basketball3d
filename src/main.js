@@ -58,6 +58,8 @@ const ui = {
   homeThemePreview: document.querySelector("#homeThemePreview"),
   awayThemePreview: document.querySelector("#awayThemePreview"),
   menuDifficultySelect: document.querySelector("#menuDifficultySelect"),
+  teamSizeSelect: document.querySelector("#teamSizeSelect"),
+  courtModeSelect: document.querySelector("#courtModeSelect"),
   audioSelect: document.querySelector("#audioSelect"),
   modeMetaTitle: document.querySelector("#modeMetaTitle"),
   modeMetaGoal: document.querySelector("#modeMetaGoal"),
@@ -80,6 +82,8 @@ let selectedModeId = game.modeId;
 let selectedHomeThemeId = game.homeThemeId;
 let selectedAwayThemeId = game.awayThemeId;
 let selectedDifficulty = game.difficulty;
+let selectedTeamSize = game.teamSize;
+let selectedCourtMode = game.courtMode;
 let audioEnabled = settings.audioEnabled !== false;
 
 function setMeterFill(element, value) {
@@ -142,6 +146,8 @@ function syncMenuControls() {
   ui.homeThemeSelect.value = selectedHomeThemeId;
   ui.awayThemeSelect.value = selectedAwayThemeId;
   ui.menuDifficultySelect.value = selectedDifficulty;
+  ui.teamSizeSelect.value = String(selectedTeamSize);
+  ui.courtModeSelect.value = selectedCourtMode;
   applyCssTheme(selectedHomeThemeId, selectedAwayThemeId);
   syncMenuCards();
 }
@@ -151,6 +157,8 @@ function syncGameConfigurationToMenu() {
   selectedHomeThemeId = game.homeThemeId;
   selectedAwayThemeId = game.awayThemeId;
   selectedDifficulty = game.difficulty;
+  selectedTeamSize = game.teamSize;
+  selectedCourtMode = game.courtMode;
   syncMenuControls();
 }
 
@@ -391,6 +399,14 @@ ui.menuDifficultySelect.addEventListener("change", (event) => {
   });
 });
 
+ui.teamSizeSelect.addEventListener("change", (event) => {
+  selectedTeamSize = Number(event.target.value);
+});
+
+ui.courtModeSelect.addEventListener("change", (event) => {
+  selectedCourtMode = event.target.value;
+});
+
 ui.audioSelect.addEventListener("change", (event) => {
   unlockAudio();
   audio.uiTap();
@@ -405,6 +421,8 @@ ui.startMatchButton.addEventListener("click", () => {
     modeId: selectedModeId,
     homeThemeId: selectedHomeThemeId,
     awayThemeId: selectedAwayThemeId,
+    teamSize: selectedTeamSize,
+    courtMode: selectedCourtMode,
   });
   game.startSelectedMatch();
   closeHomeScreen();
