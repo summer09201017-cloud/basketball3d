@@ -2291,8 +2291,8 @@ export class BasketballGame {
 
   // 視角三檔循環:斜側→180°對面→高空俯瞰;鏡頭用既有 lerp 平滑轉過去,選擇記進存檔
   cycleCameraView() {
-    this.cameraView = (this.cameraView + 1) % 3;
-    const names = ["斜側視角", "180° 對面視角", "高空俯瞰"];
+    this.cameraView = (this.cameraView + 1) % 5;
+    const names = ["斜側視角", "180° 對面視角", "高空俯瞰", "左邊視角(左籃板後)", "右邊視角(右籃板後)"];
     this.message = `視角切換:${names[this.cameraView]}。`;
     this.saveGame(true);
     this.pushHud();
@@ -2336,6 +2336,12 @@ export class BasketballGame {
       } else if (this.cameraView === 2) {
         desiredPosition = new THREE.Vector3(-6.5, 20, fz + 2.6);
         desiredLook = new THREE.Vector3(-6.5, 0, fz);
+      } else if (this.cameraView === 3) {
+        desiredPosition = new THREE.Vector3(-20.5, 12, fz * 0.3);
+        desiredLook = new THREE.Vector3(-6.5, 0.5, fz * 0.3);
+      } else if (this.cameraView === 4) {
+        desiredPosition = new THREE.Vector3(7.5, 12, fz * 0.3);
+        desiredLook = new THREE.Vector3(-6.5, 0.5, fz * 0.3);
       } else {
         desiredPosition = new THREE.Vector3(hx, 13, 13 + Math.abs(fz) * 0.15);
         desiredLook = new THREE.Vector3(hx + 1.6, 0.4, fz);
@@ -2348,6 +2354,14 @@ export class BasketballGame {
       // 高空俯瞰(戰術全景;z 略偏免得正上方翻轉)
       desiredPosition = new THREE.Vector3(fx, 33, fz + 4.2);
       desiredLook = new THREE.Vector3(fx, 0, fz);
+    } else if (this.cameraView === 3) {
+      // 左邊視角(左籃板後)
+      desiredPosition = new THREE.Vector3(-(HALF_COURT + 9), 15, fz * 0.35);
+      desiredLook = new THREE.Vector3(-3, 0.4, fz * 0.35);
+    } else if (this.cameraView === 4) {
+      // 右邊視角(右籃板後)
+      desiredPosition = new THREE.Vector3(HALF_COURT + 9, 15, fz * 0.35);
+      desiredLook = new THREE.Vector3(3, 0.4, fz * 0.35);
     } else {
       desiredPosition = new THREE.Vector3(fx - 6.8, 18.2, depth);
       desiredLook = new THREE.Vector3(fx + 5.4, 0.4, fz);
@@ -2531,7 +2545,7 @@ export class BasketballGame {
       ? snapshot.awayThemeId
       : this.awayThemeId;
     this.mode = getModeConfig(this.modeId);
-    this.cameraView = [0, 1, 2].includes(snapshot.cameraView) ? snapshot.cameraView : 0;
+    this.cameraView = [0, 1, 2, 3, 4].includes(snapshot.cameraView) ? snapshot.cameraView : 0;
     this.teamSize = [3, 4, 5].includes(snapshot.teamSize) ? snapshot.teamSize : 5;
     this.courtMode = snapshot.courtMode === "half" ? "half" : "full";
     this.targetScore = clamp(Number(snapshot.targetScore) || this.targetScore || 21, 5, 99);
