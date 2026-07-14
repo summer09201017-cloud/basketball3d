@@ -1408,6 +1408,9 @@ export class BasketballGame {
   }
 
   handleUserControl(delta) {
+    if (this.input.consumePress("camera")) { // 07-15:視角鍵最優先——罰球/特寫任何狀態都能切(原本自己罰球時 V 失效)
+      this.cycleCameraView();
+    }
     if (this.freeThrow) { // 罰球:罰球員=蓄力出手;其他人可走位(07-15:對方罰球把你凍住=「有時不能移動」bug)
       const ft = this.freeThrow;
       const ftShooter = this.getPlayerById(ft.shooterId);
