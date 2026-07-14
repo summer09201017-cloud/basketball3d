@@ -122,43 +122,43 @@ export const TEAM_THEMES = {
 // 投籃時機窗更寬(shotWindow=綠區倍率,HUD 與命中判定同步吃);青少年以上直接玩入門~職業。
 const DIFFICULTY_PRESETS = {
   kids: {
-    aiMove: 0.52,
-    aiDefense: 0.45,
-    aiShoot: 0.5,
-    aiDecision: 0.55,
-    userAssist: 1.6,
+    aiMove: 0.6,
+    aiDefense: 0.52,
+    aiShoot: 0.58,
+    aiDecision: 0.62,
+    userAssist: 1.7,
     shotWindow: 2.1,
   },
   child: {
-    aiMove: 0.66,
-    aiDefense: 0.6,
-    aiShoot: 0.62,
-    aiDecision: 0.68,
-    userAssist: 1.45,
+    aiMove: 0.76,
+    aiDefense: 0.7,
+    aiShoot: 0.72,
+    aiDecision: 0.76,
+    userAssist: 1.55,
     shotWindow: 1.6,
   },
   easy: {
-    aiMove: 0.8,
-    aiDefense: 0.77,
-    aiShoot: 0.75,
-    aiDecision: 0.75,
-    userAssist: 1.32,
+    aiMove: 0.92,
+    aiDefense: 0.9,
+    aiShoot: 0.88,
+    aiDecision: 0.85,
+    userAssist: 1.42,
     shotWindow: 1.35,
   },
   normal: {
-    aiMove: 1,
-    aiDefense: 1,
-    aiShoot: 1,
-    aiDecision: 1,
-    userAssist: 1.18,
+    aiMove: 1.12,
+    aiDefense: 1.12,
+    aiShoot: 1.1,
+    aiDecision: 1.1,
+    userAssist: 1.28,
     shotWindow: 1.15,
   },
   hard: {
-    aiMove: 1.12,
-    aiDefense: 1.15,
-    aiShoot: 1.11,
-    aiDecision: 1.15,
-    userAssist: 1.05,
+    aiMove: 1.3,
+    aiDefense: 1.32,
+    aiShoot: 1.25,
+    aiDecision: 1.3,
+    userAssist: 1.15,
   },
 };
 
@@ -177,7 +177,7 @@ const BASE_RUN_SPEED = 4.15;
 const OOB_X = 12.9;
 const OOB_Z = 6.33;
 const SHOT_WINDOW_START = 0.7;
-const SHOT_WINDOW_SIZE = 0.2; // 07-14 使用者點名:命中範圍再加大(原 0.14)
+const SHOT_WINDOW_SIZE = 0.28; // 07-15 使用者點名:命中範圍再加長(0.14→0.2→0.28)
 const SHOT_WINDOW_CENTER = SHOT_WINDOW_START + SHOT_WINDOW_SIZE / 2;
 
 const OFFENSE_SPOTS = [
@@ -1633,8 +1633,8 @@ export class BasketballGame {
         clamp(1 - Math.max(0, distanceToHoop - 4) / 11.5, 0.3, 1.05);
 
       if (
-        (forcedShot || (distanceToHoop < 9.8 && pressure < 0.55)) &&
-        Math.random() < shotQuality * 0.34
+        (forcedShot || (distanceToHoop < 9.8 && pressure < 0.55) || (distanceToHoop < 5.5 && pressure < 0.85)) &&
+        Math.random() < shotQuality * 0.5
       ) {
         this.shootBall(player, false);
         return;
@@ -1697,7 +1697,7 @@ export class BasketballGame {
     // 防守留距(07-11 使用者:AI 貼防到不能走路運球)——依難度站開:
     // 幼兒約 2.5m、標準約 1.4m、職業約 1.1m;目標點在「持球者往籃框方向」的留距處,
     // 太貼時 movePlayerTo 會自然退開,不再擠進碰撞圈推人。
-    const guardDist = clamp(3.6 - 2 * difficulty.aiDefense, 1.3, 3.0);
+    const guardDist = clamp(3.6 - 2 * difficulty.aiDefense, 1.55, 3.0);
     target.addScaledVector(helpVector, mark.id === owner.id ? guardDist : 1.6);
     target.z += mark.id === owner.id ? clamp(owner.velocity.z * 0.14, -0.5, 0.5) : 0;
 
@@ -1851,15 +1851,15 @@ export class BasketballGame {
     const finishingBoost = distance < 3.2 ? shooter.finish * 0.18 : 0;
     const windowScale = difficulty.shotWindow || 1;
     const timingError = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.24 * windowScale), 0.85, 1.25) : 1; // 07-14:時機懲罰再放寬(判定跟綠區同步加大)
+    const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.3 * windowScale), 0.88, 1.25) : 1; // 07-15:判定跟綠區同步再放寬
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
       (shotBase + finishingBoost) * 1.34 * userAssist * timingBoost * staminaBoost,
-      isUserShot ? 0.32 : 0.22, // 07-14:玩家保底命中 0.32
+      isUserShot ? 0.38 : 0.22, // 07-15:玩家保底命中再提高 0.38
       0.94,
     ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
-    const isDunk = distance < 2.3;
+    const isDunk = distance < 3.2; // 07-15 使用者點名要灌籃:觸發半徑 2.3→3.2,更容易灌
     const finalAccuracy = isDunk ? clamp(accuracy + 0.24, 0.6, 0.97) : accuracy;
     const willScore = Math.random() < finalAccuracy;
     const missSpread = clamp(1 - finalAccuracy, 0.05, 0.46);
@@ -1873,7 +1873,7 @@ export class BasketballGame {
     // 投籃臉朝框(07-11 使用者點名):出手瞬間強制面向籃框
     shooter.heading = Math.atan2(targetHoop.x - shooter.position.x, targetHoop.z - shooter.position.z);
     // 出手起跳(07-11 使用者點名:灌籃要看得到跳起來;跳投也跳)
-    shooter.jumpDur = isDunk ? 0.62 : 0.55;
+    shooter.jumpDur = isDunk ? 0.78 : 0.55; // 灌籃滯空更久
     shooter.jumpT = shooter.jumpDur;
     shooter.jumpH = isDunk ? 1.15 : 0.55;
 
@@ -2021,7 +2021,7 @@ export class BasketballGame {
     ft.userAim = false;
     const windowScale = this.difficultyPreset.shotWindow || 1;
     const err = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const prob = clamp(0.97 - (err / (0.2 * windowScale)) * 0.55, 0.3, 0.97); // 07-14:罰球判定跟綠區同步加大
+    const prob = clamp(0.97 - (err / (0.26 * windowScale)) * 0.55, 0.35, 0.97); // 07-15:罰球判定同步再放寬
     const willScore = Math.random() < prob;
     const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
     shooter.heading = Math.atan2(hoop.x - shooter.position.x, hoop.z - shooter.position.z);
