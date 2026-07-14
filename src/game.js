@@ -1859,7 +1859,8 @@ export class BasketballGame {
       0.94,
     ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
-    const isDunk = distance < 3.2; // 07-15 使用者點名要灌籃:觸發半徑 2.3→3.2,更容易灌
+    const sprintDrive = isUserShot && this.input.isDown("sprint");
+    const isDunk = distance < 3.2 || (sprintDrive && distance < 5.0); // 07-15:衝刺(Shift)殺到 5m 內出手=飛身灌籃
     const finalAccuracy = isDunk ? clamp(accuracy + 0.24, 0.6, 0.97) : accuracy;
     const willScore = Math.random() < finalAccuracy;
     const missSpread = clamp(1 - finalAccuracy, 0.05, 0.46);
@@ -1868,7 +1869,7 @@ export class BasketballGame {
     aim.z += willScore ? randomSigned(0.08) : randomSigned(0.55 + missSpread);
     aim.y = RIM_HEIGHT + (willScore ? 0.04 : randomSigned(0.22));
 
-    const duration = isDunk ? 0.42 : clamp(distance / 10.5, 0.88, 1.34);
+    const duration = isDunk ? clamp(distance / 9.5, 0.42, 0.58) : clamp(distance / 10.5, 0.88, 1.34); // 遠距衝刺灌籃飛久一點
 
     // 投籃臉朝框(07-11 使用者點名):出手瞬間強制面向籃框
     shooter.heading = Math.atan2(targetHoop.x - shooter.position.x, targetHoop.z - shooter.position.z);
@@ -2415,7 +2416,7 @@ export class BasketballGame {
       const rate =
         nearestPlayer.team === "away"
           ? 0.4 * this.difficultyPreset.aiDefense
-          : 0.5;
+          : (nearestPlayer.id === this.getUserControlledPlayer().id ? 0.55 : 0); // 07-15:隊友不自動攔截,抄球留給玩家自己
       if (Math.random() > rate) return;
     }
     const wasShot = Boolean(this.ball.pendingShot);
