@@ -303,6 +303,31 @@ function createCourtTexture() {
     context.stroke();
   }
 
+  // 三分線(07-14 使用者點名):以引擎籃框座標+6.75m 規則畫;plane 寬高 px/m 不同→用 ellipse
+  {
+    const pxPerMx = canvas.width / COURT_LENGTH;
+    const pxPerMz = canvas.height / COURT_WIDTH;
+    const R3 = 6.75;
+    context.lineWidth = 10;
+    for (const side of [-1, 1]) {
+      const rimWorldX = side * (HALF_COURT - HOOP_OFFSET);
+      const rimPx = ((rimWorldX + HALF_COURT) / COURT_LENGTH) * canvas.width;
+      const cy = canvas.height / 2;
+      const ry = R3 * pxPerMz;
+      const baselinePx = side === -1 ? marginX : canvas.width - marginX;
+      context.beginPath();
+      if (side === -1) context.ellipse(rimPx, cy, R3 * pxPerMx, ry, 0, -Math.PI / 2, Math.PI / 2);
+      else context.ellipse(rimPx, cy, R3 * pxPerMx, ry, 0, Math.PI / 2, (Math.PI * 3) / 2);
+      context.stroke();
+      for (const s2 of [-1, 1]) { // 底角直線:弧端點連回底線
+        context.beginPath();
+        context.moveTo(rimPx, cy + s2 * ry);
+        context.lineTo(baselinePx, cy + s2 * ry);
+        context.stroke();
+      }
+    }
+  }
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
