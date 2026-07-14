@@ -1868,10 +1868,10 @@ export class BasketballGame {
     const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.3 * windowScale), 0.88, 1.25) : 1; // 07-15:判定跟綠區同步再放寬
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
-      (shotBase + finishingBoost) * 1.34 * userAssist * timingBoost * staminaBoost,
-      isUserShot ? 0.38 : 0.22, // 07-15:玩家保底命中再提高 0.38
-      0.94,
-    ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
+      (shotBase + finishingBoost) * 1.5 * userAssist * timingBoost * staminaBoost, // 07-15:雙方命中全域 1.34→1.5
+      isUserShot ? 0.42 : 0.3, // 07-15 三修:雙方保底再提高(玩家0.42/AI 0.3)
+      0.96,
+    ); // 上限 0.94→0.96 // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
     const sprintDrive = isUserShot && this.input.isDown("sprint");
     const isDunk = distance < 3.2 || (sprintDrive && distance < 5.0); // 07-15:衝刺(Shift)殺到 5m 內出手=飛身灌籃
