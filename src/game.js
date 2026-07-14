@@ -1382,7 +1382,20 @@ export class BasketballGame {
   }
 
   handleUserControl(delta) {
-    if (this.freeThrow) return; // 罰球演出中不操作
+    if (this.freeThrow) { // 玩家罰球:只開放蓄力出手(07-14 拍板)
+      const ft = this.freeThrow;
+      const ftShooter = this.getPlayerById(ft.shooterId);
+      if (ft.userAim && ftShooter && ftShooter.team === "home" && !this.ball.pendingShot) {
+        if (this.input.isDown("shoot")) {
+          this.advanceShotMeter(delta, ftShooter.id);
+        } else if (this.userShotMeter.active && this.input.consumeRelease("shoot")) {
+          const meterValue = this.userShotMeter.value;
+          this.cancelShotMeter();
+          this.performUserFreeThrow(ftShooter, meterValue);
+        }
+      }
+      return;
+    }
     const player = this.getUserControlledPlayer();
     if (!player) {
       return;
@@ -1398,7 +1411,14 @@ export class BasketballGame {
     }
 
     const move = this.input.getMovementVector();
-    const movement = new THREE.Vector3(move.x, 0, move.z);
+    // 鏡像鐵則(07-14 使用者回報:右邊視角按下人往上):輸入=螢幕方向,
+    // 用鏡頭基底換算世界向量——五視角/罰球視角全部同步正確
+    const camF = this.camera.getWorldDirection(new THREE.Vector3());
+    camF.y = 0;
+    if (camF.lengthSq() < 0.0001) camF.set(1, 0, 0); // 正俯瞰退化保護
+    camF.normalize();
+    const camR = new THREE.Vector3().crossVectors(camF, new THREE.Vector3(0, 1, 0));
+    const movement = camF.multiplyScalar(move.x).add(camR.multiplyScalar(move.z));
     const isSprint = this.input.isDown("sprint");
 
     if (movement.lengthSq() > 0) {
@@ -1968,6 +1988,41 @@ export class BasketballGame {
     this.emitEvent("foul", { teamLabel: this.getTeamLabel(shooter.team), count });
   }
 
+  // 玩家手控罰球(07-14 拍板):時機決定進球率——綠區正中 97%,偏差線性掉到 30%
+  performUserFreeThrow(shooter, releaseValue) {
+    const ft = this.freeThrow;
+    if (!ft || ft.remaining <= 0 || this.ball.pendingShot) return;
+    ft.remaining -= 1;
+    ft.userAim = false;
+    const windowScale = this.difficultyPreset.shotWindow || 1;
+    const err = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
+    const prob = clamp(0.97 - (err / (0.16 * windowScale)) * 0.55, 0.3, 0.97);
+    const willScore = Math.random() < prob;
+    const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
+    shooter.heading = Math.atan2(hoop.x - shooter.position.x, hoop.z - shooter.position.z);
+    shooter.jumpDur = 0.4; shooter.jumpT = 0.4; shooter.jumpH = 0.28;
+    const release = shooter.position.clone(); release.y = 1.6;
+    const aim = hoop.clone();
+    aim.x += willScore ? randomSigned(0.06) : randomSigned(0.4);
+    aim.z += willScore ? randomSigned(0.06) : randomSigned(0.45);
+    aim.y = RIM_HEIGHT + (willScore ? 0.04 : randomSigned(0.2));
+    this.ball.ownerId = null;
+    this.ball.lastTouchTeam = shooter.team;
+    this.ball.freeTimer = 0;
+    this.ball.position.copy(release);
+    this.ball.velocity.copy(buildLaunchVelocity(release, aim, 1.05, -18));
+    this.ball.pendingShot = {
+      shooterId: shooter.id,
+      shooterTeam: shooter.team,
+      points: 1,
+      willScore,
+      freeThrow: true,
+      targetHoop: this.getTargetHoopKey(shooter.team),
+      checkedRim: false,
+    };
+    this.message = `罰球出手(第 / 罰)。`;
+  }
+
   updateFreeThrow(delta) {
     const ft = this.freeThrow;
     if (!ft || this.ball.pendingShot) return;
@@ -1975,6 +2030,14 @@ export class BasketballGame {
     if (ft.timer > 0) return;
     const shooter = this.getPlayerById(ft.shooterId);
     if (!shooter || ft.remaining <= 0) { this.freeThrow = null; return; }
+    if (shooter.team === "home") { // 07-14 使用者拍板:玩家自己罰球——蓄力找時機,不再自動
+      if (!ft.userAim) {
+        ft.userAim = true;
+        this.message = "罰球:按住投籃鍵蓄力,指針停在綠區放開——手感決定進不進!";
+        this.pushHud();
+      }
+      return;
+    }
     ft.remaining -= 1;
     const difficulty = this.difficultyPreset;
     const prob = shooter.team === "home" ? 0.82 : clamp(0.45 + 0.4 * difficulty.aiShoot, 0.5, 0.85);
@@ -2447,6 +2510,15 @@ export class BasketballGame {
       desiredLook = new THREE.Vector3(fx + 5.4, 0.4, fz);
     }
 
+    if (this.freeThrow) { // 罰球專用視角(07-14 拍板):罰球員肩後看框
+      const ftS = this.getPlayerById(this.freeThrow.shooterId);
+      if (ftS) {
+        const ftHoop = this.getTargetHoopForTeam(ftS.team).rimCenter;
+        const dir = Math.sign(ftHoop.x - ftS.position.x) || 1;
+        desiredPosition = new THREE.Vector3(ftS.position.x - dir * 3.6, 2.5, ftS.position.z + 1.4);
+        desiredLook = new THREE.Vector3(ftHoop.x, RIM_HEIGHT - 0.2, ftHoop.z);
+      }
+    }
     this.pointer.cameraPosition.lerp(desiredPosition, 1 - Math.exp(-delta * 2.7));
     this.camera.position.copy(this.pointer.cameraPosition);
 
