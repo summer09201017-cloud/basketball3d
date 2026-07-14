@@ -177,7 +177,7 @@ const BASE_RUN_SPEED = 4.15;
 const OOB_X = 12.9;
 const OOB_Z = 6.33;
 const SHOT_WINDOW_START = 0.7;
-const SHOT_WINDOW_SIZE = 0.14;
+const SHOT_WINDOW_SIZE = 0.2; // 07-14 使用者點名:命中範圍再加大(原 0.14)
 const SHOT_WINDOW_CENTER = SHOT_WINDOW_START + SHOT_WINDOW_SIZE / 2;
 
 const OFFENSE_SPOTS = [
@@ -1826,7 +1826,7 @@ export class BasketballGame {
     const finishingBoost = distance < 3.2 ? shooter.finish * 0.18 : 0;
     const windowScale = difficulty.shotWindow || 1;
     const timingError = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.2 * windowScale), 0.85, 1.25) : 1; // 07-14:時機懲罰放寬(0.72→0.85 底)
+    const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.24 * windowScale), 0.85, 1.25) : 1; // 07-14:時機懲罰再放寬(判定跟綠區同步加大)
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
       (shotBase + finishingBoost) * 1.34 * userAssist * timingBoost * staminaBoost,
@@ -1996,7 +1996,7 @@ export class BasketballGame {
     ft.userAim = false;
     const windowScale = this.difficultyPreset.shotWindow || 1;
     const err = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const prob = clamp(0.97 - (err / (0.16 * windowScale)) * 0.55, 0.3, 0.97);
+    const prob = clamp(0.97 - (err / (0.2 * windowScale)) * 0.55, 0.3, 0.97); // 07-14:罰球判定跟綠區同步加大
     const willScore = Math.random() < prob;
     const hoop = this.getTargetHoopForTeam(shooter.team).rimCenter;
     shooter.heading = Math.atan2(hoop.x - shooter.position.x, hoop.z - shooter.position.z);
