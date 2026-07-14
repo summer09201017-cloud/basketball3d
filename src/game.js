@@ -174,8 +174,8 @@ const BALL_RADIUS = 0.24;
 const PLAYER_RADIUS = 0.43;
 const BASE_RUN_SPEED = 4.15;
 // 界外線=地板貼圖的白線位置(貼圖 margin 80/2048 換算):踩出線=帶球出界
-const OOB_X = 12.9;
-const OOB_Z = 6.33;
+const OOB_X = HALF_COURT - (80 / 2048) * COURT_LENGTH; // 貼圖白線內緣(隨球場尺寸推導,07-15 修)
+const OOB_Z = HALF_WIDTH - (80 / 1024) * COURT_WIDTH;
 const SHOT_WINDOW_START = 0.7;
 const SHOT_WINDOW_SIZE = 0.28; // 07-15 使用者點名:命中範圍再加長(0.14→0.2→0.28)
 const SHOT_WINDOW_CENTER = SHOT_WINDOW_START + SHOT_WINDOW_SIZE / 2;
@@ -1188,7 +1188,7 @@ export class BasketballGame {
     for (const player of this.getTeamPlayers(team)) {
       const template = OFFENSE_SPOTS[player.roleIndex];
       player.position.set(
-        clamp(offenseStartX + template.x * attackDirection, -12.5, 12.5),
+        clamp(offenseStartX + template.x * attackDirection, -(OOB_X - 0.4), OOB_X - 0.4),
         0,
         clamp(template.z, -5.8, 5.8),
       );
@@ -1533,9 +1533,9 @@ export class BasketballGame {
     const c = this.ball.position.y - BALL_RADIUS;
     const t = solvePositiveQuadratic(a, b, c) ?? 0.75;
     return new THREE.Vector3(
-      clamp(this.ball.position.x + this.ball.velocity.x * t, -12.8, 12.8),
+      clamp(this.ball.position.x + this.ball.velocity.x * t, -OOB_X, OOB_X),
       0,
-      clamp(this.ball.position.z + this.ball.velocity.z * t, -6.3, 6.3),
+      clamp(this.ball.position.z + this.ball.velocity.z * t, -OOB_Z, OOB_Z),
     );
   }
 
@@ -1579,7 +1579,7 @@ export class BasketballGame {
           const index = this.players.indexOf(player);
           const angle = (index / this.players.length) * Math.PI * 2;
           const spread = new THREE.Vector3(
-            clamp(this.ball.position.x + Math.cos(angle) * 4.6, -12.5, 12.5),
+            clamp(this.ball.position.x + Math.cos(angle) * 4.6, -(OOB_X - 0.4), OOB_X - 0.4),
             0,
             clamp(this.ball.position.z + Math.sin(angle) * 3.4, -(HALF_WIDTH - 1), HALF_WIDTH - 1),
           );
@@ -2004,7 +2004,7 @@ export class BasketballGame {
       if (p.id === shooter.id) continue;
       const away = Math.sign(spotX - hoop.x) || 1;
       if (distanceXZ(p.position, shooter.position) < 2.4) {
-        p.position.x = clamp(spotX + away * 2.8, -12.5, 12.5);
+        p.position.x = clamp(spotX + away * 2.8, -(OOB_X - 0.4), OOB_X - 0.4);
         p.position.z = clamp(p.position.z * 1.4 + (p.position.z >= 0 ? 1 : -1), -6, 6);
       }
       p.velocity.set(0, 0, 0);
@@ -2194,8 +2194,8 @@ export class BasketballGame {
   updatePlayers(delta) {
     for (const player of this.players) {
       player.position.addScaledVector(player.velocity, delta);
-      player.position.x = clamp(player.position.x, -13.2, this.courtMode === "half" ? 0.6 : 13.2);
-      player.position.z = clamp(player.position.z, -6.8, 6.8);
+      player.position.x = clamp(player.position.x, -(OOB_X + 0.3), this.courtMode === "half" ? 0.6 : OOB_X + 0.3);
+      player.position.z = clamp(player.position.z, -(OOB_Z + 0.5), OOB_Z + 0.5);
       player.velocity.multiplyScalar(player.velocity.lengthSq() < 0.002 ? 0 : 0.96);
 
       if (player.velocity.lengthSq() > 0.02) {
@@ -2206,8 +2206,8 @@ export class BasketballGame {
     this.resolvePlayerCollisions();
 
     for (const player of this.players) {
-      player.position.x = clamp(player.position.x, -13.2, this.courtMode === "half" ? 0.6 : 13.2);
-      player.position.z = clamp(player.position.z, -6.8, 6.8);
+      player.position.x = clamp(player.position.x, -(OOB_X + 0.3), this.courtMode === "half" ? 0.6 : OOB_X + 0.3);
+      player.position.z = clamp(player.position.z, -(OOB_Z + 0.5), OOB_Z + 0.5);
     }
   }
 
