@@ -124,7 +124,7 @@ const DIFFICULTY_PRESETS = {
   kids: {
     aiMove: 0.6,
     aiDefense: 0.52,
-    aiShoot: 0.58,
+    aiShoot: 0.62,
     aiDecision: 0.62,
     userAssist: 1.7,
     shotWindow: 2.1,
@@ -132,7 +132,7 @@ const DIFFICULTY_PRESETS = {
   child: {
     aiMove: 0.76,
     aiDefense: 0.7,
-    aiShoot: 0.72,
+    aiShoot: 0.8,
     aiDecision: 0.76,
     userAssist: 1.55,
     shotWindow: 1.6,
@@ -140,7 +140,7 @@ const DIFFICULTY_PRESETS = {
   easy: {
     aiMove: 0.92,
     aiDefense: 0.9,
-    aiShoot: 0.88,
+    aiShoot: 1.0,
     aiDecision: 0.85,
     userAssist: 1.42,
     shotWindow: 1.35,
@@ -148,7 +148,7 @@ const DIFFICULTY_PRESETS = {
   normal: {
     aiMove: 1.12,
     aiDefense: 1.12,
-    aiShoot: 1.1,
+    aiShoot: 1.22,
     aiDecision: 1.1,
     userAssist: 1.28,
     shotWindow: 1.15,
@@ -156,7 +156,7 @@ const DIFFICULTY_PRESETS = {
   hard: {
     aiMove: 1.3,
     aiDefense: 1.32,
-    aiShoot: 1.25,
+    aiShoot: 1.4,
     aiDecision: 1.3,
     userAssist: 1.15,
   },
@@ -1711,9 +1711,9 @@ export class BasketballGame {
     if (
       player.team === "away" &&
       owner.team === "home" &&
-      distanceXZ(player.position, owner.position) < 0.96 &&
+      distanceXZ(player.position, owner.position) < 1.4 &&
       player.cooldown === 0 &&
-      Math.random() < 0.011 * difficulty.aiDefense * 60 * delta
+      Math.random() < 0.022 * difficulty.aiDefense * 60 * delta
     ) {
       this.tryStealOrBlock(player, false);
     }
@@ -1844,7 +1844,7 @@ export class BasketballGame {
     const distance = distanceXZ(release, targetHoop);
     const points = distance > 6.75 ? 3 : 2;
     const nearestDefender = this.findNearestDefender(shooter);
-    const openness = clamp(nearestDefender.distance / 2.8, isUserShot ? 0.62 : 0.5, 1.2); // 玩家下限 0.62(07-14:命中率太低點名);AI 維持 0.5
+    const openness = clamp(nearestDefender.distance / 2.8, 0.62, 1.2); // 07-15:AI 下限也提到 0.62(AI 命中率點名)
     const rangePenalty = clamp((distance - 4.5) / 11.5, 0, 0.48);
     const staminaBoost = THREE.MathUtils.lerp(0.8, 1.08, shooter.stamina);
     const shotBase = shooter.shoot * openness * (1 - rangePenalty);
@@ -1933,7 +1933,7 @@ export class BasketballGame {
       defender.defense *
       staminaFactor *
       spacingFactor *
-      (userInitiated ? 0.5 : 0.2 * difficulty.aiDefense) *
+      (userInitiated ? 0.5 : 0.34 * difficulty.aiDefense) * // 07-15:AI 主動抄截加強
       (this.ball.pendingShot ? 0.75 : 1);
 
     if (Math.random() < baseChance) {
