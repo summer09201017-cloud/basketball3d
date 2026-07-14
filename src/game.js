@@ -1712,7 +1712,7 @@ export class BasketballGame {
     if (
       player.team === "away" &&
       owner.team === "home" &&
-      distanceXZ(player.position, owner.position) < 1.4 &&
+      distanceXZ(player.position, owner.position) < 1.75 && // 07-15 二修:蓋過守距,抄回玩家的球
       player.cooldown === 0 &&
       Math.random() < 0.022 * difficulty.aiDefense * 60 * delta
     ) {
@@ -1946,25 +1946,25 @@ export class BasketballGame {
 
     defender.cooldown = 2.0; // 07-15:抄截冷卻拉長(原 0.8,加強後犯規爆量)
 
-    // 撲抄突進:朝持球者衝一步+鏡頭微震——按 K 一定看得到動作(07-11 使用者:無明顯反應)
-    if (userInitiated) {
+    // 撲抄突進:朝持球者衝一步——玩家按 K 與 AI 抄截都要看得到撲的動作(07-15:AI 隔太遠揮空)
+    {
       const lunge = new THREE.Vector3()
         .subVectors(owner.position, defender.position)
         .setY(0)
         .normalize();
-      defender.velocity.addScaledVector(lunge, 5.2);
-      this.cameraShake = Math.max(this.cameraShake, 0.1);
+      defender.velocity.addScaledVector(lunge, userInitiated ? 5.2 : 4.4);
+      if (userInitiated) this.cameraShake = Math.max(this.cameraShake, 0.1);
     }
 
     const difficulty = this.difficultyPreset;
     const spacing = distanceXZ(defender.position, owner.position);
-    const spacingFactor = clamp(1 - spacing / 1.9, 0.08, 1);
+    const spacingFactor = clamp(1 - spacing / 1.9, userInitiated ? 0.08 : 0.3, 1); // 07-15:AI 撲抄有補正下限(撲進去抄)
     const staminaFactor = THREE.MathUtils.lerp(0.82, 1.08, defender.stamina);
     const baseChance =
       defender.defense *
       staminaFactor *
       spacingFactor *
-      (userInitiated ? 0.5 : 0.34 * difficulty.aiDefense) * // 07-15:AI 主動抄截加強
+      (userInitiated ? 0.5 : 0.5 * difficulty.aiDefense) * // 07-15 二修:AI 主動抄截成功率再上調
       (this.ball.pendingShot ? 0.75 : 1);
 
     if (Math.random() < baseChance) {
@@ -2486,7 +2486,7 @@ export class BasketballGame {
       const rate =
         nearestPlayer.team === "away"
           ? 0.4 * this.difficultyPreset.aiDefense
-          : (nearestPlayer.id === this.getUserControlledPlayer().id ? 0.55 : 0); // 07-15:隊友不自動攔截,抄球留給玩家自己
+          : (nearestPlayer.id === this.getUserControlledPlayer().id ? 0.26 : 0); // 07-15 二修:玩家自動攔截調降(太強),主動按抄截還是 0.5
       if (Math.random() > rate) return;
     }
     const wasShot = Boolean(this.ball.pendingShot);
