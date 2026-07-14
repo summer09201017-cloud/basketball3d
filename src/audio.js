@@ -220,4 +220,66 @@ export class AudioManager {
     });
   }
 
+
+  makeNoiseBuffer() {
+    const ctx = this.ensureContext();
+    if (!ctx) return null;
+    if (this._noiseBuf) return this._noiseBuf;
+    const len = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (0.6 + 0.4 * Math.random());
+    this._noiseBuf = buf;
+    return buf;
+  }
+
+  startCrowd() {
+    const ctx = this.ensureContext();
+    if (!ctx || this._crowd) return;
+    const buf = this.makeNoiseBuffer();
+    if (!buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 620; lp.Q.value = 0.4;
+    const g = ctx.createGain();
+    g.gain.value = 0.65;
+    src.connect(lp); lp.connect(g); g.connect(this.masterGain);
+    src.start();
+    this._crowd = { src, gain: g };
+  }
+
+  stopCrowd() {
+    if (!this._crowd) return;
+    try { this._crowd.src.stop(); } catch { /* ignore */ }
+    this._crowd = null;
+  }
+
+  crowdCheer(strength = 1) {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.enabled) return;
+    this.startCrowd();
+    if (this._crowd) {
+      const g = this._crowd.gain.gain;
+      const now = ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(Math.max(0.65, g.value), now);
+      g.linearRampToValueAtTime(0.65 + 2.2 * strength, now + 0.1);
+      g.exponentialRampToValueAtTime(0.65, now + 2.6);
+    }
+    const buf = this.makeNoiseBuffer();
+    for (let i = 0; i < 10; i++) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass"; hp.frequency.value = 1600;
+      const g2 = ctx.createGain();
+      const t0 = ctx.currentTime + Math.random() * 0.6;
+      g2.gain.setValueAtTime(0.0001, t0);
+      g2.gain.exponentialRampToValueAtTime(0.5 * strength, t0 + 0.01);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+      src.connect(hp); hp.connect(g2); g2.connect(this.masterGain);
+      src.start(t0); src.stop(t0 + 0.1);
+    }
+  }
 }

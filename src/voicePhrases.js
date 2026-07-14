@@ -11,6 +11,7 @@ export function voiceKey(text) {
 }
 
 export const PHRASES = [
+  "加油!加油!",
   // 開賽/節間/終場
   "比賽開始!雙方跳球爭搶!",
   "哨聲響起,全場對決開打!",

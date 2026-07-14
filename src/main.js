@@ -242,6 +242,7 @@ function handleGameEvent(event) {
   switch (event.type) {
     case "match-start": {
       audio.whistle();
+      audio.startCrowd(); // 觀眾環境人聲(crowd-kit)
       audio.vibrate(18);
       lastLeadSign = 0;
       const line = pick(["比賽開始!雙方跳球爭搶!", "哨聲響起,全場對決開打!", "球員就位——比賽開始!"]);
@@ -261,6 +262,8 @@ function handleGameEvent(event) {
     case "score": {
       audio.swish();
       audio.scoreSting();
+      audio.crowdCheer(event.dunk ? 1 : 0.7); // 得分喝采浪(crowd-kit)
+      if (event.team === "away" && Math.random() < 0.3) speakLine("加油!加油!"); // 落後打氣(輪替,別每次唸)
       audio.vibrate([35, 25, 55]);
       if (event.dunk) {
         pushCommentary(`${event.teamLabel} 飛身暴扣!全場沸騰!`, event.team === "home" ? "hot" : "cool", "飛身暴扣!全場沸騰!");
@@ -317,6 +320,8 @@ function handleGameEvent(event) {
       audio.thud(event.strength * 0.35);
       break;
     case "match-end": {
+      audio.crowdCheer(1);
+      setTimeout(() => audio.stopCrowd(), 3200);
       audio.horn();
       audio.vibrate([110, 50, 120]);
       const line = `終場哨響!${event.winnerLabel} 獲勝,最終比分 ${event.homeScore} 比 ${event.awayScore}!`;

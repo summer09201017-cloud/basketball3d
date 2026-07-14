@@ -315,7 +315,8 @@ function createPlayerMaterial(color) {
   });
 }
 
-function createLimb(material, upperLength, lowerLength, radius) {
+// ★07-12 關節人物鐵則(抄自 archery3d):雙節肢體+五指手/腳掌;lowerPivot=肘/膝(動畫介面不變)
+function createLimb(material, upperLength, lowerLength, radius, { end = null, lowerMaterial = null, endMaterial = null, thumbSide = 1 } = {}) {
   const pivot = new THREE.Group();
   const upper = new THREE.Mesh(
     new THREE.CapsuleGeometry(radius, upperLength * 0.6, 4, 10),
@@ -330,10 +331,35 @@ function createLimb(material, upperLength, lowerLength, radius) {
 
   const lower = new THREE.Mesh(
     new THREE.CapsuleGeometry(radius * 0.94, lowerLength * 0.56, 4, 10),
-    material,
+    lowerMaterial || material,
   );
   lower.position.y = -(lowerLength * 0.5);
   lowerPivot.add(lower);
+
+  if (end === "foot") {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(radius * 2.1, radius, radius * 3.4), endMaterial || material);
+    foot.position.set(0, -lowerLength - radius * 0.4, radius * 0.9);
+    lowerPivot.add(foot);
+  } else if (end === "hand") {
+    const r = radius * 0.8;
+    const hand = new THREE.Group();
+    hand.position.y = -lowerLength - r * 0.2;
+    const skinM = endMaterial || material;
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(r * 2.2, r * 1.7, r * 1.0), skinM);
+    palm.position.y = -r * 0.85;
+    hand.add(palm);
+    for (let fi = 0; fi < 4; fi += 1) {
+      const finger = new THREE.Mesh(new THREE.BoxGeometry(r * 0.44, r * 1.25, r * 0.55), skinM);
+      finger.position.set((fi - 1.5) * r * 0.54, -r * 2.1, 0);
+      finger.rotation.x = 0.14;
+      hand.add(finger);
+    }
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(r * 0.5, r * 1.0, r * 0.55), skinM);
+    thumb.position.set(thumbSide * r * 1.3, -r * 0.95, r * 0.1);
+    thumb.rotation.z = thumbSide * -0.55;
+    hand.add(thumb);
+    lowerPivot.add(hand);
+  }
 
   return {
     pivot,
@@ -358,86 +384,90 @@ function createPlayerMesh(theme) {
   const rig = new THREE.Group();
   group.add(rig);
 
-  const torso = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.34, 0.8, 6, 12),
-    primaryMaterial,
-  );
-  torso.position.y = 1.18;
-  rig.add(torso);
-
-  const shoulderBand = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.42, 0.2, 16),
-    secondaryMaterial,
-  );
-  shoulderBand.position.y = 1.7;
-  rig.add(shoulderBand);
-
-  const waist = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.36, 0.39, 0.25, 16),
-    accentMaterial,
-  );
-  waist.position.y = 0.9;
-  rig.add(waist);
-
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.28, 18, 18),
-    skinMaterial,
-  );
-  head.position.y = 2.05;
-  rig.add(head);
-
-  const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.12, 0.12, 0.08),
-    accentMaterial,
-  );
-  visor.position.set(0, 2.02, 0.25);
-  rig.add(visor);
-
-  // ★臉部鐵則(07-11 使用者點名):眼睛+眉毛+微笑,貼頭前側(+z,與 visor 同向)
+  const shoeMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.85 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x2b2119, roughness: 0.85 });
   const faceDark = new THREE.MeshBasicMaterial({ color: 0x25201a });
   const faceWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), faceWhite);
-  eyeLeft.position.set(-0.1, 2.12, 0.24);
+
+  // 身體(07-12 鐵則:胸腔短+瘦腰+脖子):籃球背心=隊色,短褲=副色
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.76, 0.32) /* 矩形身體(07-13 鐵則) */, primaryMaterial);
+  torso.position.y = 1.3;
+  rig.add(torso);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.2, 12), skinMaterial);
+  neck.position.y = 1.88;
+  rig.add(neck);
+  const waist = new THREE.Group();
+  waist.position.y = 1.16;
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.3, 0.27), primaryMaterial);
+  belly.position.y = -0.05;
+  const hip = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.22, 0.29), secondaryMaterial); // 短褲
+  hip.position.y = -0.26;
+  const beltLine = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.06, 0.28), accentMaterial);
+  beltLine.position.y = -0.15;
+  waist.add(belly, hip, beltLine);
+  rig.add(waist);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 18, 18), skinMaterial);
+  head.position.y = 2.12;
+  rig.add(head);
+  const earL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), skinMaterial);
+  earL.scale.set(0.45, 1, 0.8);
+  earL.position.set(-0.245, 1.99, 0);
+  rig.add(earL);
+  const earR = earL.clone();
+  earR.position.x = 0.245;
+  rig.add(earR);
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), hairMat);
+  hairCap.position.y = 2.01;
+  hairCap.rotation.x = -0.22;
+  rig.add(hairCap);
+  const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.255, 16, 8, Math.PI, Math.PI, Math.PI * 0.35, Math.PI * 0.22), hairMat);
+  hairBack.position.y = 2.0;
+  rig.add(hairBack);
+
+  const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), faceWhite);
+  eyeLeft.position.set(-0.09, 2.06, 0.21);
   rig.add(eyeLeft);
   const eyeRight = eyeLeft.clone();
-  eyeRight.position.x = 0.1;
+  eyeRight.position.x = 0.09;
   rig.add(eyeRight);
-  const pupilLeft = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), faceDark);
-  pupilLeft.position.set(-0.1, 2.12, 0.29);
+  const pupilLeft = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), faceDark);
+  pupilLeft.position.set(-0.09, 2.06, 0.25);
   rig.add(pupilLeft);
   const pupilRight = pupilLeft.clone();
-  pupilRight.position.x = 0.1;
+  pupilRight.position.x = 0.09;
   rig.add(pupilRight);
-  const browLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.022, 0.02), faceDark);
-  browLeft.position.set(-0.1, 2.21, 0.25);
-  browLeft.rotation.z = 0.18;
+  const browLeft = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.02), faceDark);
+  browLeft.position.set(-0.09, 2.14, 0.22);
+  browLeft.rotation.z = 0.16;
   rig.add(browLeft);
   const browRight = browLeft.clone();
-  browRight.position.x = 0.1;
-  browRight.rotation.z = -0.18;
+  browRight.position.x = 0.09;
+  browRight.rotation.z = -0.16;
   rig.add(browRight);
-  const smile = new THREE.Mesh(
-    new THREE.TorusGeometry(0.075, 0.015, 8, 14, Math.PI),
-    faceDark,
-  );
-  smile.position.set(0, 1.95, 0.24);
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.014, 8, 14, Math.PI), faceDark);
+  smile.position.set(0, 1.92, 0.21);
   smile.rotation.z = Math.PI;
   rig.add(smile);
 
-  const leftArm = createLimb(secondaryMaterial, 0.58, 0.5, 0.08);
-  leftArm.pivot.position.set(-0.46, 1.66, 0);
+  // 手臂:背心無袖=整臂膚色+五指手
+  const leftArm = createLimb(skinMaterial, 0.27, 0.26, 0.07, { end: "hand", thumbSide: 1 });
+  leftArm.pivot.position.set(-0.4, 1.72, 0);
+  leftArm.lowerPivot.rotation.x = -0.2;
   rig.add(leftArm.pivot);
-
-  const rightArm = createLimb(secondaryMaterial, 0.58, 0.5, 0.08);
-  rightArm.pivot.position.set(0.46, 1.66, 0);
+  const rightArm = createLimb(skinMaterial, 0.27, 0.26, 0.07, { end: "hand", thumbSide: -1 });
+  rightArm.pivot.position.set(0.4, 1.72, 0);
+  rightArm.lowerPivot.rotation.x = -0.2;
   rig.add(rightArm.pivot);
 
-  const leftLeg = createLimb(primaryMaterial, 0.62, 0.58, 0.09);
-  leftLeg.pivot.position.set(-0.19, 0.87, 0);
+  // 腿:大腿=短褲色、小腿=膚色(籃球短褲)、球鞋
+  const leftLeg = createLimb(secondaryMaterial, 0.34, 0.32, 0.09, { end: "foot", lowerMaterial: skinMaterial, endMaterial: shoeMat });
+  leftLeg.pivot.position.set(-0.15, 1.0, 0);
+  leftLeg.lowerPivot.rotation.x = 0.08;
   rig.add(leftLeg.pivot);
-
-  const rightLeg = createLimb(primaryMaterial, 0.62, 0.58, 0.09);
-  rightLeg.pivot.position.set(0.19, 0.87, 0);
+  const rightLeg = createLimb(secondaryMaterial, 0.34, 0.32, 0.09, { end: "foot", lowerMaterial: skinMaterial, endMaterial: shoeMat });
+  rightLeg.pivot.position.set(0.15, 1.0, 0);
+  rightLeg.lowerPivot.rotation.x = 0.08;
   rig.add(rightLeg.pivot);
 
   const selectionRing = new THREE.Mesh(
@@ -472,10 +502,8 @@ function createPlayerMesh(theme) {
     group,
     rig,
     torso,
-    shoulderBand,
     waist,
     head,
-    visor,
     leftArm,
     rightArm,
     leftLeg,
@@ -768,6 +796,56 @@ export class BasketballGame {
       );
       sidelineWall.position.set(0, 0.65, side * 10.5);
       this.scene.add(sidelineWall);
+    }
+
+    // 觀眾臉部鐵則(crowd-kit,07-11 拍板):眼睛/瞳孔/嘴巴、臉朝球場;5 個 InstancedMesh=5 draw call
+    {
+      const seats = [];
+      for (const side of [-1, 1]) { // 邊線兩排(z 排 ≤±12.7,預設鏡 z≥18.7 不會埋進觀眾)
+        for (const [rz, ry] of [[11.8, 1.5], [12.7, 2.1]]) {
+          for (let i = 0; i < 24; i += 1) {
+            seats.push({ x: -12.7 + i * 1.1 + (Math.random() - 0.5) * 0.3, y: ry + (Math.random() - 0.5) * 0.12, z: side * (rz + (Math.random() - 0.5) * 0.2), fx: 0, fz: -side });
+          }
+        }
+      }
+      for (const ex of [-1, 1]) { // 底線看台兩排(坐在 x±18 看台箱上)
+        for (const [rx, ry] of [[17.3, 2.85], [18.7, 3.35]]) {
+          for (let i = 0; i < 16; i += 1) {
+            seats.push({ x: ex * (rx + (Math.random() - 0.5) * 0.2), y: ry + (Math.random() - 0.5) * 0.12, z: -8.2 + i * 1.1 + (Math.random() - 0.5) * 0.3, fx: -ex, fz: 0 });
+          }
+        }
+      }
+      const N = seats.length;
+      const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshStandardMaterial({ roughness: 0.9 }), N);
+      const torsos = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.32, 0.16), new THREE.MeshStandardMaterial({ roughness: 1 }), N);
+      const eyesW = new THREE.InstancedMesh(new THREE.SphereGeometry(0.032, 6, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), N * 2);
+      const pupils = new THREE.InstancedMesh(new THREE.SphereGeometry(0.016, 5, 5), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }), N * 2);
+      const mouths = new THREE.InstancedMesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshStandardMaterial({ color: 0x8a2e2e }), N);
+      const dummy = new THREE.Object3D();
+      const robes = [0xe86a5a, 0x5aa1e8, 0xe8c95a, 0x6b4a2a, 0x4a6b3a, 0xd8d0c0];
+      const skins = [0xf2c89a, 0xe6b183, 0xd9a06f];
+      const put = (inst, idx, x, y, z, sx = 1, sy = 1, sz = 1) => {
+        dummy.position.set(x, y, z);
+        dummy.scale.set(sx, sy, sz);
+        dummy.updateMatrix();
+        inst.setMatrixAt(idx, dummy.matrix);
+      };
+      seats.forEach((s, i) => {
+        const { x, y, z, fx, fz } = s;
+        const px = -fz, pz = fx; // 垂直於視線=兩眼分開方向
+        put(heads, i, x, y, z);
+        heads.setColorAt(i, new THREE.Color(skins[Math.floor(Math.random() * skins.length)]));
+        put(torsos, i, x, y - 0.31, z);
+        torsos.setColorAt(i, new THREE.Color(robes[Math.floor(Math.random() * robes.length)]));
+        put(eyesW, i * 2, x + fx * 0.115 + px * 0.062, y + 0.035, z + fz * 0.115 + pz * 0.062);
+        put(eyesW, i * 2 + 1, x + fx * 0.115 - px * 0.062, y + 0.035, z + fz * 0.115 - pz * 0.062);
+        put(pupils, i * 2, x + fx * 0.145 + px * 0.062, y + 0.035, z + fz * 0.145 + pz * 0.062);
+        put(pupils, i * 2 + 1, x + fx * 0.145 - px * 0.062, y + 0.035, z + fz * 0.145 - pz * 0.062);
+        if (i % 2 === 0) put(mouths, i, x + fx * 0.13, y - 0.055, z + fz * 0.13, 1 + Math.abs(px) * 0.8, 0.45, 1 + Math.abs(pz) * 0.8); // 微笑
+        else put(mouths, i, x + fx * 0.135, y - 0.05, z + fz * 0.135, 0.8, 1.0, 0.8); // 歡呼 O 嘴
+      });
+      this.crowd = heads;
+      this.scene.add(heads, torsos, eyesW, pupils, mouths);
     }
 
     this.hoops.home = this.createHoop(-1);
