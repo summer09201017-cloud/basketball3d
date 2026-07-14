@@ -1717,6 +1717,19 @@ export class BasketballGame {
     ) {
       this.tryStealOrBlock(player, false);
     }
+    // 我方 AI 隊友貼防過兇=打手犯規,對方罰球兩次(07-15 使用者點名:雙向要有犯規;隊友不搶球只會犯規)
+    if (
+      player.team === "home" &&
+      owner.team === "away" &&
+      !this.freeThrow &&
+      this.deadBallTimer === 0 &&
+      distanceXZ(player.position, owner.position) < 0.85 &&
+      player.cooldown === 0 &&
+      Math.random() < 0.0035 * 60 * delta
+    ) {
+      player.cooldown = 2.4;
+      this.startFreeThrows(owner, 2, false);
+    }
   }
 
   updateReboundAI(player, delta) {
@@ -1879,7 +1892,7 @@ export class BasketballGame {
     shooter.jumpH = isDunk ? 1.15 : 0.55;
 
     // 犯規:防守者貼身(<0.95m)干擾出手,有機率吹哨→罰球兩次(一直貼防就會送罰球)
-    if (!this.freeThrow && nearestDefender.distance < 0.95 && Math.random() < 0.24) {
+    if (!this.freeThrow && nearestDefender.distance < 0.95 && Math.random() < 0.14) { // 07-15:犯規頻率調降
       this.startFreeThrows(shooter, 2, isDunk);
       return;
     }
@@ -1914,7 +1927,7 @@ export class BasketballGame {
       return;
     }
 
-    defender.cooldown = 0.8;
+    defender.cooldown = 2.0; // 07-15:抄截冷卻拉長(原 0.8,加強後犯規爆量)
 
     // 撲抄突進:朝持球者衝一步+鏡頭微震——按 K 一定看得到動作(07-11 使用者:無明顯反應)
     if (userInitiated) {
@@ -1965,7 +1978,7 @@ export class BasketballGame {
     } else if (userInitiated) {
       this.message = "差一點抄到，趕快回防。";
       this.emitEvent("steal-try", {});
-    } else if (!this.freeThrow && spacing < 0.9 && Math.random() < 0.3) {
+    } else if (!this.freeThrow && spacing < 0.9 && Math.random() < 0.12) { // 07-15:打手犯規機率調降
       // AI 抄截揮空+貼太近=打手犯規→持球者罰球兩次(貼防的代價)
       this.startFreeThrows(owner, 2, false);
     }
