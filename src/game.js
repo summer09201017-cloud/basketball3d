@@ -163,8 +163,8 @@ const DIFFICULTY_PRESETS = {
 };
 
 const ROLE_NAMES = ["PG", "SG", "SF", "PF", "C"];
-const COURT_LENGTH = 32; // 07-14 使用者拍板:球場加大(原 28)
-const COURT_WIDTH = 18; // 07-14 使用者拍板:球場加寬(原 15)
+const COURT_LENGTH = 36; // 07-14 使用者二度拍板:再加大(28→32→36)
+const COURT_WIDTH = 20; // 07-14 使用者二度拍板:再加寬(15→18→20)
 const HALF_COURT = COURT_LENGTH / 2;
 const HALF_WIDTH = COURT_WIDTH / 2;
 const HOOP_OFFSET = 1.35;
@@ -387,7 +387,7 @@ function createPlayerMesh(theme) {
   group.add(rig);
 
   const shoeMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.85 });
-  const hairMat = new THREE.MeshStandardMaterial({ color: 0x2b2119, roughness: 0.85 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: [0x2b2119, 0x171310, 0x5a3a1e, 0x8a5a2a][Math.floor(Math.random() * 4)], roughness: 0.85 }); // 髮色隨機(07-14)
   const faceDark = new THREE.MeshBasicMaterial({ color: 0x25201a });
   const faceWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
@@ -420,7 +420,7 @@ function createPlayerMesh(theme) {
   earR.position.x = 0.245;
   rig.add(earR);
   const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), hairMat);
-  hairCap.position.y = 2.01;
+  hairCap.position.y = 2.13; // 07-14 修:原 2.01 整個埋進頭(頭心 2.12),看不到頭髮
   hairCap.rotation.x = -0.22;
   rig.add(hairCap);
   const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.255, 16, 8, Math.PI, Math.PI, Math.PI * 0.35, Math.PI * 0.22), hairMat);
