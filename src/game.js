@@ -126,7 +126,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 0.45,
     aiShoot: 0.5,
     aiDecision: 0.55,
-    userAssist: 1.5,
+    userAssist: 1.6,
     shotWindow: 2.1,
   },
   child: {
@@ -134,29 +134,31 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 0.6,
     aiShoot: 0.62,
     aiDecision: 0.68,
-    userAssist: 1.3,
-    shotWindow: 1.55,
+    userAssist: 1.45,
+    shotWindow: 1.6,
   },
   easy: {
     aiMove: 0.8,
     aiDefense: 0.77,
     aiShoot: 0.75,
     aiDecision: 0.75,
-    userAssist: 1.16,
+    userAssist: 1.32,
+    shotWindow: 1.35,
   },
   normal: {
     aiMove: 1,
     aiDefense: 1,
     aiShoot: 1,
     aiDecision: 1,
-    userAssist: 1,
+    userAssist: 1.18,
+    shotWindow: 1.15,
   },
   hard: {
     aiMove: 1.12,
     aiDefense: 1.15,
     aiShoot: 1.11,
     aiDecision: 1.15,
-    userAssist: 0.93,
+    userAssist: 1.05,
   },
 };
 
@@ -1797,18 +1799,18 @@ export class BasketballGame {
     const distance = distanceXZ(release, targetHoop);
     const points = distance > 6.75 ? 3 : 2;
     const nearestDefender = this.findNearestDefender(shooter);
-    const openness = clamp(nearestDefender.distance / 2.8, 0.5, 1.2); // 下限 0.3→0.5:半場貼防不壓死命中(07-11)
+    const openness = clamp(nearestDefender.distance / 2.8, isUserShot ? 0.62 : 0.5, 1.2); // 玩家下限 0.62(07-14:命中率太低點名);AI 維持 0.5
     const rangePenalty = clamp((distance - 4.5) / 11.5, 0, 0.48);
     const staminaBoost = THREE.MathUtils.lerp(0.8, 1.08, shooter.stamina);
     const shotBase = shooter.shoot * openness * (1 - rangePenalty);
     const finishingBoost = distance < 3.2 ? shooter.finish * 0.18 : 0;
     const windowScale = difficulty.shotWindow || 1;
     const timingError = Math.abs(releaseValue - SHOT_WINDOW_CENTER);
-    const timingBoost = isUserShot ? clamp(1.2 - timingError / (0.18 * windowScale), 0.72, 1.2) : 1;
+    const timingBoost = isUserShot ? clamp(1.25 - timingError / (0.2 * windowScale), 0.85, 1.25) : 1; // 07-14:時機懲罰放寬(0.72→0.85 底)
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
       (shotBase + finishingBoost) * 1.34 * userAssist * timingBoost * staminaBoost,
-      0.22,
+      isUserShot ? 0.32 : 0.22, // 07-14:玩家保底命中 0.32
       0.94,
     ); // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
