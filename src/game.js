@@ -1331,6 +1331,7 @@ export class BasketballGame {
           this.updateStamina(delta);
           this.updatePlayers(delta);
           this.updateBall(delta);
+          this.updateDunk(delta);
           this.resolveLooseBall();
         }
 
@@ -1903,6 +1904,22 @@ export class BasketballGame {
     this.ball.lastTouchTeam = shooter.team;
     this.ball.position.copy(release);
     this.ball.velocity.copy(buildLaunchVelocity(release, aim, duration, -18));
+    if (isDunk) { // 07-15 使用者點名:灌籃=人真的飛到框上把球塞進去,不是跳投
+      const dirX = Math.sign(targetHoop.x - shooter.position.x) || 1;
+      this.dunk = {
+        playerId: shooter.id,
+        t: 0,
+        dur: shooter.jumpDur + 0.12,
+        fromX: shooter.position.x, fromZ: shooter.position.z,
+        toX: targetHoop.x - dirX * 0.55,
+        toZ: targetHoop.z + (shooter.position.z - targetHoop.z) * 0.12,
+        hoop: targetHoop.clone(),
+        aim: aim.clone(),
+        willScore,
+        slammed: false,
+      };
+      this.ball.velocity.set(0, 0, 0); // 球改由 updateDunk 載飛
+    }
     this.ball.pendingShot = {
       shooterId: shooter.id,
       shooterTeam: shooter.team,
@@ -2225,6 +2242,45 @@ export class BasketballGame {
     }
   }
 
+  // 灌籃載球飛行(07-15):人衝到框沿、球舉到框口、扣入或砸框彈出;highlight 給特寫鏡頭用
+  updateDunk(delta) {
+    const d = this.dunk;
+    if (!d) return;
+    const p = this.getPlayerById(d.playerId);
+    if (!p || !this.ball.pendingShot) { this.dunk = null; return; }
+    d.t += delta;
+    const k = clamp(d.t / d.dur, 0, 1);
+    const ease = k * k * (3 - 2 * k);
+    p.position.x = THREE.MathUtils.lerp(d.fromX, d.toX, ease);
+    p.position.z = THREE.MathUtils.lerp(d.fromZ, d.toZ, ease);
+    p.velocity.set(0, 0, 0);
+    if (!d.slammed) {
+      const tx = d.hoop.x - p.position.x, tz = d.hoop.z - p.position.z;
+      const m = Math.hypot(tx, tz) || 1;
+      this.ball.position.set(
+        p.position.x + (tx / m) * 0.42,
+        1.5 + Math.sin(Math.min(1, k / 0.8) * Math.PI * 0.5) * (RIM_HEIGHT - 1.4),
+        p.position.z + (tz / m) * 0.42,
+      );
+      this.ball.velocity.set(0, 0, 0);
+      if (k >= 0.8) { // 扣!
+        d.slammed = true;
+        this.highlight = { t: 1.1, hoop: d.hoop.clone() }; // 精彩特寫定格
+        if (d.willScore) {
+          this.ball.position.set(d.hoop.x, RIM_HEIGHT + 0.24, d.hoop.z);
+          this.ball.velocity.set(0, -5.5, 0);
+        } else { // 砸框彈出
+          const ax = d.aim.x - d.hoop.x, az = d.aim.z - d.hoop.z;
+          const am = Math.hypot(ax, az) || 1;
+          this.ball.position.set(d.hoop.x + (ax / am) * RIM_RADIUS * 1.4, RIM_HEIGHT + 0.15, d.hoop.z + (az / am) * RIM_RADIUS * 1.4);
+          this.ball.velocity.set((ax / am) * 6.5, 2.4, (az / am) * 6.5);
+        }
+        this.cameraShake = Math.max(this.cameraShake, 0.26);
+      }
+    }
+    if (k >= 1) this.dunk = null;
+  }
+
   updateBall(delta) {
     const owner = this.getBallOwner();
     if (owner) {
@@ -2322,6 +2378,7 @@ export class BasketballGame {
   }
 
   finishScore(shot) {
+    if (shot.points === 3) this.highlight = { t: 1.2, hoop: this.getTargetHoopForTeam(shot.shooterTeam).rimCenter.clone() }; // 三分精彩特寫(07-15)
     this.score[shot.shooterTeam] += shot.points;
     this.ball.pendingShot = null;
     this.ball.ownerId = null;
@@ -2557,6 +2614,23 @@ export class BasketballGame {
         desiredPosition = new THREE.Vector3(ftS.position.x - dir * 3.6, 2.5, ftS.position.z + 1.4);
         desiredLook = new THREE.Vector3(ftHoop.x, RIM_HEIGHT - 0.2, ftHoop.z);
       }
+    }
+    if (this.highlight) { // 精彩定格(07-15):灌籃/三分後鏡頭釘在框邊低角 1 秒
+      this.highlight.t -= delta;
+      const hp = this.highlight.hoop;
+      const side = Math.sign(hp.x) || 1;
+      desiredPosition = new THREE.Vector3(hp.x - side * 3.4, 2.0, hp.z + 3.8);
+      desiredLook = new THREE.Vector3(hp.x, RIM_HEIGHT - 0.3, hp.z);
+      if (this.highlight.t <= 0) this.highlight = null;
+    } else if (this.dunk) { // 灌籃飛行特寫:框邊低角看人飛進來
+      const hp = this.dunk.hoop;
+      const side = Math.sign(hp.x) || 1;
+      desiredPosition = new THREE.Vector3(hp.x - side * 2.8, 1.9, hp.z + 4.2);
+      desiredLook = new THREE.Vector3(this.ball.position.x, this.ball.position.y, this.ball.position.z);
+    } else if (this.ball.pendingShot && this.ball.pendingShot.points === 3 && !this.ball.pendingShot.freeThrow) {
+      // 三分飛行:側面跟球
+      desiredPosition = new THREE.Vector3(this.ball.position.x, this.ball.position.y + 1.4, this.ball.position.z + 6.5);
+      desiredLook = new THREE.Vector3(this.ball.position.x, this.ball.position.y, this.ball.position.z);
     }
     this.pointer.cameraPosition.lerp(desiredPosition, 1 - Math.exp(-delta * 2.7));
     this.camera.position.copy(this.pointer.cameraPosition);
