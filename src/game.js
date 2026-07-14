@@ -23,7 +23,7 @@ export const GAME_MODES = {
     description: "標準全場 4 節制，比數從 0:0 開始，適合完整打一場。",
     goal: "4 節內拿下勝利，平手進入延長賽。",
     regulationPeriods: 4,
-    quarterDuration: 75,
+    quarterDuration: 180, // 07-15 使用者拍板:每節 3 分鐘
     overtimeDuration: 45,
     shotClock: 18,
     startScore: { home: 0, away: 0 },
@@ -1408,10 +1408,11 @@ export class BasketballGame {
   }
 
   handleUserControl(delta) {
-    if (this.freeThrow) { // 玩家罰球:只開放蓄力出手(07-14 拍板)
+    if (this.freeThrow) { // 罰球:罰球員=蓄力出手;其他人可走位(07-15:對方罰球把你凍住=「有時不能移動」bug)
       const ft = this.freeThrow;
       const ftShooter = this.getPlayerById(ft.shooterId);
-      if (ft.userAim && ftShooter && ftShooter.team === "home" && !this.ball.pendingShot) {
+      const userIsShooter = ftShooter && this.getUserControlledPlayer().id === ftShooter.id;
+      if (ft.userAim && ftShooter && ftShooter.team === "home" && userIsShooter && !this.ball.pendingShot) {
         if (this.input.isDown("shoot")) {
           this.advanceShotMeter(delta, ftShooter.id);
         } else if (this.userShotMeter.active && this.input.consumeRelease("shoot")) {
@@ -1420,7 +1421,7 @@ export class BasketballGame {
           this.performUserFreeThrow(ftShooter, meterValue);
         }
       }
-      return;
+      if (userIsShooter) return; // 罰球員站罰球線;非罰球員往下走=可移動
     }
     const player = this.getUserControlledPlayer();
     if (!player) {
@@ -1483,7 +1484,7 @@ export class BasketballGame {
       }
     } else {
       this.cancelShotMeter();
-      if (this.possessionTeam !== "home" && this.deadBallTimer === 0) {
+      if (this.possessionTeam !== "home" && this.deadBallTimer === 0 && !this.freeThrow) {
         const pressedAction = this.input.consumePress("action") || this.input.consumePress("shoot");
         if (pressedAction) {
           this.tryStealOrBlock(player, true);
