@@ -163,8 +163,8 @@ const DIFFICULTY_PRESETS = {
 };
 
 const ROLE_NAMES = ["PG", "SG", "SF", "PF", "C"];
-const COURT_LENGTH = 28;
-const COURT_WIDTH = 15;
+const COURT_LENGTH = 32; // 07-14 使用者拍板:球場加大(原 28)
+const COURT_WIDTH = 18; // 07-14 使用者拍板:球場加寬(原 15)
 const HALF_COURT = COURT_LENGTH / 2;
 const HALF_WIDTH = COURT_WIDTH / 2;
 const HOOP_OFFSET = 1.35;
@@ -784,19 +784,19 @@ export class BasketballGame {
           roughness: 0.96,
         }),
       );
-      stands.position.set(side * 18, 1.2, 0);
+      stands.position.set(side * (HALF_COURT + 4), 1.2, 0);
       this.scene.add(stands);
     }
 
     for (const side of [-1, 1]) {
       const sidelineWall = new THREE.Mesh(
-        new THREE.BoxGeometry(34, 1.3, 2.2),
+        new THREE.BoxGeometry(COURT_LENGTH + 6, 1.3, 2.2),
         new THREE.MeshStandardMaterial({
           color: 0x102231,
           roughness: 0.92,
         }),
       );
-      sidelineWall.position.set(0, 0.65, side * 10.5);
+      sidelineWall.position.set(0, 0.65, side * (HALF_WIDTH + 3));
       this.scene.add(sidelineWall);
     }
 
@@ -804,16 +804,16 @@ export class BasketballGame {
     {
       const seats = [];
       for (const side of [-1, 1]) { // 邊線兩排(z 排 ≤±12.7,預設鏡 z≥18.7 不會埋進觀眾)
-        for (const [rz, ry] of [[11.8, 1.5], [12.7, 2.1]]) {
+        for (const [rz, ry] of [[HALF_WIDTH + 4.3, 1.5], [HALF_WIDTH + 5.2, 2.1]]) {
           for (let i = 0; i < 24; i += 1) {
-            seats.push({ x: -12.7 + i * 1.1 + (Math.random() - 0.5) * 0.3, y: ry + (Math.random() - 0.5) * 0.12, z: side * (rz + (Math.random() - 0.5) * 0.2), fx: 0, fz: -side });
+            seats.push({ x: -(HALF_COURT - 1.3) + i * ((COURT_LENGTH - 2.6) / 23) + (Math.random() - 0.5) * 0.3, y: ry + (Math.random() - 0.5) * 0.12, z: side * (rz + (Math.random() - 0.5) * 0.2), fx: 0, fz: -side });
           }
         }
       }
       for (const ex of [-1, 1]) { // 底線看台兩排(坐在 x±18 看台箱上)
-        for (const [rx, ry] of [[17.3, 2.85], [18.7, 3.35]]) {
+        for (const [rx, ry] of [[HALF_COURT + 3.3, 2.85], [HALF_COURT + 4.7, 3.35]]) {
           for (let i = 0; i < 16; i += 1) {
-            seats.push({ x: ex * (rx + (Math.random() - 0.5) * 0.2), y: ry + (Math.random() - 0.5) * 0.12, z: -8.2 + i * 1.1 + (Math.random() - 0.5) * 0.3, fx: -ex, fz: 0 });
+            seats.push({ x: ex * (rx + (Math.random() - 0.5) * 0.2), y: ry + (Math.random() - 0.5) * 0.12, z: -(HALF_WIDTH + 0.7) + i * ((COURT_WIDTH + 1.4) / 15) + (Math.random() - 0.5) * 0.3, fx: -ex, fz: 0 });
           }
         }
       }
@@ -1175,7 +1175,7 @@ export class BasketballGame {
     for (const player of this.getTeamPlayers(team === "home" ? "away" : "home")) {
       const markTemplate = OFFENSE_SPOTS[player.roleIndex];
       player.position.set(
-        clamp(defenseAnchorX + markTemplate.x * attackDirection, -10.5, 10.5),
+        clamp(defenseAnchorX + markTemplate.x * attackDirection, -(HALF_COURT - 3.5), HALF_COURT - 3.5),
         0,
         clamp(markTemplate.z * 0.9, -5.2, 5.2),
       );
@@ -1536,7 +1536,7 @@ export class BasketballGame {
           const spread = new THREE.Vector3(
             clamp(this.ball.position.x + Math.cos(angle) * 4.6, -12.5, 12.5),
             0,
-            clamp(this.ball.position.z + Math.sin(angle) * 3.4, -6.5, 6.5),
+            clamp(this.ball.position.z + Math.sin(angle) * 3.4, -(HALF_WIDTH - 1), HALF_WIDTH - 1),
           );
           this.movePlayerTo(player, spread, delta, 0.82);
         }
@@ -2405,25 +2405,25 @@ export class BasketballGame {
 
     const fx = this.pointer.cameraFocus.x;
     const fz = this.pointer.cameraFocus.z;
-    const depth = 18.7 + Math.abs(fz) * 0.18;
+    const depth = HALF_WIDTH + 11.2 + Math.abs(fz) * 0.18;
     let desiredPosition, desiredLook;
     if (this.courtMode === "half") {
       // 半場特寫(07-11 使用者拍板):鏡頭只框左半場,球員放大約一倍;微跟焦點不甩鏡
-      const hx = -6.5 + fx * 0.2;
+      const hx = -(HALF_COURT / 2 - 0.5) + fx * 0.2;
       if (this.cameraView === 1) {
-        desiredPosition = new THREE.Vector3(hx, 13, -(13 + Math.abs(fz) * 0.15));
+        desiredPosition = new THREE.Vector3(hx, 13, -(HALF_WIDTH + 5.5 + Math.abs(fz) * 0.15));
         desiredLook = new THREE.Vector3(hx - 1.6, 0.4, fz);
       } else if (this.cameraView === 2) {
-        desiredPosition = new THREE.Vector3(-6.5, 20, fz + 2.6);
-        desiredLook = new THREE.Vector3(-6.5, 0, fz);
+        desiredPosition = new THREE.Vector3(-(HALF_COURT / 2 - 0.5), 20, fz + 2.6);
+        desiredLook = new THREE.Vector3(-(HALF_COURT / 2 - 0.5), 0, fz);
       } else if (this.cameraView === 3) {
-        desiredPosition = new THREE.Vector3(-20.5, 12, fz * 0.3);
-        desiredLook = new THREE.Vector3(-6.5, 0.5, fz * 0.3);
+        desiredPosition = new THREE.Vector3(-(HALF_COURT + 6.5), 12, fz * 0.3);
+        desiredLook = new THREE.Vector3(-(HALF_COURT / 2 - 0.5), 0.5, fz * 0.3);
       } else if (this.cameraView === 4) {
-        desiredPosition = new THREE.Vector3(7.5, 12, fz * 0.3);
-        desiredLook = new THREE.Vector3(-6.5, 0.5, fz * 0.3);
+        desiredPosition = new THREE.Vector3(HALF_COURT / 2 + 0.5, 12, fz * 0.3);
+        desiredLook = new THREE.Vector3(-(HALF_COURT / 2 - 0.5), 0.5, fz * 0.3);
       } else {
-        desiredPosition = new THREE.Vector3(hx, 13, 13 + Math.abs(fz) * 0.15);
+        desiredPosition = new THREE.Vector3(hx, 13, HALF_WIDTH + 5.5 + Math.abs(fz) * 0.15);
         desiredLook = new THREE.Vector3(hx + 1.6, 0.4, fz);
       }
     } else if (this.cameraView === 1) {
