@@ -1478,6 +1478,19 @@ export class BasketballGame {
         this.shootBall(owner, true, meterValue);
       }
 
+      // 灌籃快速鍵(07-15 使用者點名:F/Alt 一鍵灌籃):6m 內直接飛身扣籃,免蓄力免 Shift
+      if (this.input.consumePress("dunk")) {
+        const hoopAim = this.getTargetHoopForTeam(player.team).rimCenter;
+        const dunkDist = Math.hypot(hoopAim.x - player.position.x, hoopAim.z - player.position.z);
+        if (dunkDist < 6.0) {
+          this.cancelShotMeter();
+          this._forceDunk = true; // shootBall 讀後即清
+          this.shootBall(owner, true, 0.85);
+        } else {
+          this.message = "離籃框太遠灌不到——衝進 6 公尺內再按灌籃鍵(F/Alt)!";
+        }
+      }
+
       if (this.input.consumePress("pass")) {
         this.cancelShotMeter();
         const target = this.chooseBestPassTarget(owner, true);
@@ -1716,9 +1729,9 @@ export class BasketballGame {
     if (
       player.team === "away" &&
       owner.team === "home" &&
-      distanceXZ(player.position, owner.position) < 1.75 && // 07-15 二修:蓋過守距,抄回玩家的球
+      distanceXZ(player.position, owner.position) < 1.5 && // 07-15 三修:使用者點名 AI 抄太兇——要貼更近才出手
       player.cooldown === 0 &&
-      Math.random() < 0.022 * difficulty.aiDefense * 60 * delta
+      Math.random() < 0.009 * difficulty.aiDefense * 60 * delta // 07-15 三修:0.022→0.009,別一直抄玩家的球
     ) {
       this.tryStealOrBlock(player, false);
     }
@@ -1878,7 +1891,9 @@ export class BasketballGame {
     ); // 上限 0.94→0.96 // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
     const sprintDrive = isUserShot && this.input.isDown("sprint");
-    const isDunk = distance < 3.2 || (sprintDrive && distance < 6.0); // 07-15 使用者拍板 6m(原 5m;曾議 10m,太遠破壞平衡)
+    const forceDunk = isUserShot && this._forceDunk;
+    this._forceDunk = false;
+    const isDunk = distance < 3.2 || ((sprintDrive || forceDunk) && distance < 6.0); // 07-15 拍板 6m;F/Alt=一鍵灌籃
     const finalAccuracy = isDunk ? clamp(accuracy + 0.24, 0.6, 0.97) : accuracy;
     const willScore = Math.random() < finalAccuracy;
     const missSpread = clamp(1 - finalAccuracy, 0.05, 0.46);
@@ -1948,7 +1963,7 @@ export class BasketballGame {
       return;
     }
 
-    defender.cooldown = 2.0; // 07-15:抄截冷卻拉長(原 0.8,加強後犯規爆量)
+    defender.cooldown = 3.2; // 07-15 三修:2.0→3.2,AI 抄一次要歇久一點(使用者點名抄太兇)
 
     // 撲抄突進:朝持球者衝一步——玩家按 K 與 AI 抄截都要看得到撲的動作(07-15:AI 隔太遠揮空)
     {

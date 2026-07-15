@@ -13,6 +13,9 @@ const KEY_BINDINGS = {
   KeyL: "switch",
   Tab: "switch",
   KeyV: "camera",
+  KeyF: "dunk",
+  AltLeft: "dunk",
+  AltRight: "dunk",
   ShiftLeft: "sprint",
   ShiftRight: "sprint",
   Escape: "pause",
@@ -74,7 +77,7 @@ export class InputManager {
       return;
     }
 
-    if (event.code === "Tab" || event.code === "Space") {
+    if (event.code === "Tab" || event.code === "Space" || event.code === "AltLeft" || event.code === "AltRight") {
       event.preventDefault();
     }
 
