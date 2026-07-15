@@ -1878,7 +1878,7 @@ export class BasketballGame {
     ); // 上限 0.94→0.96 // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
     const sprintDrive = isUserShot && this.input.isDown("sprint");
-    const isDunk = distance < 3.2 || (sprintDrive && distance < 5.0); // 07-15:衝刺(Shift)殺到 5m 內出手=飛身灌籃
+    const isDunk = distance < 3.2 || (sprintDrive && distance < 6.0); // 07-15 使用者拍板 6m(原 5m;曾議 10m,太遠破壞平衡)
     const finalAccuracy = isDunk ? clamp(accuracy + 0.24, 0.6, 0.97) : accuracy;
     const willScore = Math.random() < finalAccuracy;
     const missSpread = clamp(1 - finalAccuracy, 0.05, 0.46);
