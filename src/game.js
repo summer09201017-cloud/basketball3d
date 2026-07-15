@@ -126,7 +126,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 0.52,
     aiShoot: 0.62,
     aiDecision: 0.62,
-    userAssist: 1.7,
+    userAssist: 1.85,
     shotWindow: 2.1,
   },
   child: {
@@ -134,7 +134,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 0.7,
     aiShoot: 0.8,
     aiDecision: 0.76,
-    userAssist: 1.55,
+    userAssist: 1.7,
     shotWindow: 1.6,
   },
   easy: {
@@ -142,7 +142,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 0.9,
     aiShoot: 1.0,
     aiDecision: 0.85,
-    userAssist: 1.42,
+    userAssist: 1.55,
     shotWindow: 1.35,
   },
   normal: {
@@ -150,7 +150,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 1.12,
     aiShoot: 1.22,
     aiDecision: 1.1,
-    userAssist: 1.28,
+    userAssist: 1.42,
     shotWindow: 1.15,
   },
   hard: {
@@ -158,7 +158,7 @@ const DIFFICULTY_PRESETS = {
     aiDefense: 1.32,
     aiShoot: 1.4,
     aiDecision: 1.3,
-    userAssist: 1.15,
+    userAssist: 1.28,
   },
 };
 
@@ -1886,7 +1886,7 @@ export class BasketballGame {
     const userAssist = shooter.team === "home" ? difficulty.userAssist : difficulty.aiShoot;
     const accuracy = clamp(
       (shotBase + finishingBoost) * 1.5 * userAssist * timingBoost * staminaBoost, // 07-15:雙方命中全域 1.34→1.5
-      isUserShot ? 0.42 : 0.3, // 07-15 三修:雙方保底再提高(玩家0.42/AI 0.3)
+      shooter.team === "home" ? 0.5 : 0.3, // 07-15 四修:我方全隊保底 0.5(使用者點名我方命中再提高)
       0.96,
     ); // 上限 0.94→0.96 // 1.34 全域加成:雙方命中率再提高(07-11 使用者玩半場後點名)
     // 灌籃(07-11 使用者點名):貼框出手=飛身灌籃——高命中、平快彈道、大鏡震
