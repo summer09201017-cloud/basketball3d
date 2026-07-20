@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { InputManager } from "./input.js";
+import { animateIdleHead, animateCrowdCheer, EAR_SAFE_PHI } from "./idle-life.js"; // idle 生動(3d-figure-kit 共用資產)
 import {
   loadSavedGame,
   loadSettings,
@@ -434,48 +435,61 @@ function createPlayerMesh(theme) {
   waist.add(belly, hip, beltLine);
   rig.add(waist);
 
+  // 頭+臉群組(idle 生動鐵則):整顆頭(頭球/耳/髮/眼/瞳/眉/嘴)全收進 headGroup,樞紐=頭中心 2.12,
+  // 這樣 idle「偶爾往左看」時整顆頭連臉一起轉(舊版臉直接掛 rig → 只轉頭球臉不跟)。
+  // H(y)=以頭中心為原點的局部座標(= 原立姿 y − 2.12);headGroup 坐在 rig 的 2.12,
+  // 故 H(y)+2.12 = y → 視覺位置與改動前逐一相同(露眼/耳前無髮鐵則皆不變)。
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 2.12;
+  rig.add(headGroup);
+  const H = (y) => y - 2.12;
+
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 18, 18), skinMaterial);
-  head.position.y = 2.12;
-  rig.add(head);
+  head.position.y = H(2.12);
+  headGroup.add(head);
   const earL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), skinMaterial);
   earL.scale.set(0.45, 1, 0.8);
-  earL.position.set(-0.245, 1.99, 0);
-  rig.add(earL);
+  earL.position.set(-0.245, H(1.99), 0);
+  headGroup.add(earL);
   const earR = earL.clone();
   earR.position.x = 0.245;
-  rig.add(earR);
+  headGroup.add(earR);
   const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.46), hairMat);
-  hairCap.position.y = 2.13; // 07-14 修:原 2.01 整個埋進頭(頭心 2.12),看不到頭髮
+  hairCap.position.y = H(2.13); // 07-14 修:原 2.01 整個埋進頭(頭心 2.12),看不到頭髮
   hairCap.rotation.x = -0.22;
-  rig.add(hairCap);
-  const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.255, 16, 8, Math.PI, Math.PI, Math.PI * 0.35, Math.PI * 0.22), hairMat);
-  hairBack.position.y = 2.0;
-  rig.add(hairBack);
+  headGroup.add(hairCap);
+  // ★耳前無髮鐵律:後腦髮片用 EAR_SAFE_PHI(前緣一律留在耳後 z<0,兩鬢與耳前露出)
+  const hairBack = new THREE.Mesh(
+    new THREE.SphereGeometry(0.255, 16, 8, EAR_SAFE_PHI.start, EAR_SAFE_PHI.end - EAR_SAFE_PHI.start, Math.PI * 0.35, Math.PI * 0.22),
+    hairMat,
+  );
+  hairBack.position.y = H(2.0);
+  headGroup.add(hairBack);
 
   const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), faceWhite);
-  eyeLeft.position.set(-0.09, 2.06, 0.21);
-  rig.add(eyeLeft);
+  eyeLeft.position.set(-0.09, H(2.06), 0.21);
+  headGroup.add(eyeLeft);
   const eyeRight = eyeLeft.clone();
   eyeRight.position.x = 0.09;
-  rig.add(eyeRight);
+  headGroup.add(eyeRight);
   const pupilLeft = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), faceDark);
-  pupilLeft.position.set(-0.09, 2.06, 0.25);
-  rig.add(pupilLeft);
+  pupilLeft.position.set(-0.09, H(2.06), 0.25);
+  headGroup.add(pupilLeft);
   const pupilRight = pupilLeft.clone();
   pupilRight.position.x = 0.09;
-  rig.add(pupilRight);
+  headGroup.add(pupilRight);
   const browLeft = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.02), faceDark);
-  browLeft.position.set(-0.09, 2.14, 0.22);
+  browLeft.position.set(-0.09, H(2.14), 0.22);
   browLeft.rotation.z = 0.16;
-  rig.add(browLeft);
+  headGroup.add(browLeft);
   const browRight = browLeft.clone();
   browRight.position.x = 0.09;
   browRight.rotation.z = -0.16;
-  rig.add(browRight);
+  headGroup.add(browRight);
   const smile = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.014, 8, 14, Math.PI), faceDark);
-  smile.position.set(0, 1.92, 0.21);
+  smile.position.set(0, H(1.92), 0.21);
   smile.rotation.z = Math.PI;
-  rig.add(smile);
+  headGroup.add(smile);
 
   // 手臂:背心無袖=整臂膚色+五指手
   const leftArm = createLimb(skinMaterial, 0.27, 0.26, 0.07, { end: "hand", thumbSide: 1 });
@@ -531,6 +545,8 @@ function createPlayerMesh(theme) {
     torso,
     waist,
     head,
+    headGroup,
+    smile,
     leftArm,
     rightArm,
     leftLeg,
@@ -545,6 +561,94 @@ function createPlayerMesh(theme) {
       possessionMaterial: possessionRing.material,
     },
   };
+}
+
+// 前排「歡呼觀眾」個體人偶(可舉手+左右看,供 idle-life 的 animateCrowdCheer 驅動)。
+// 比賽場密集看台仍用 InstancedMesh 當背景;這批只擺前排、數量精簡=動得起來又不掉幀。
+// 契約鍵:headGroup / leftArm{pivot,joint} / rightArm{pivot,joint} / rig(hopUp 用)。
+function makeCheerFan({ robe, skin, hair }) {
+  const group = new THREE.Group();
+  const rig = new THREE.Group();
+  group.add(rig);
+  const robeMat = new THREE.MeshStandardMaterial({ color: robe, roughness: 0.96 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.85 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: hair, roughness: 0.9 });
+  const faceDark = new THREE.MeshBasicMaterial({ color: 0x25201a });
+  const faceWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const mouthMat = new THREE.MeshBasicMaterial({ color: 0x8a2e2e });
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.22), robeMat);
+  torso.position.y = 1.14;
+  rig.add(torso);
+
+  // 頭+臉群組(樞紐=頭中心 1.62,H(y)=y−1.62)
+  const HC = 1.62;
+  const headGroup = new THREE.Group();
+  headGroup.position.y = HC;
+  rig.add(headGroup);
+  const H = (y) => y - HC;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), skinMat);
+  head.position.y = H(HC);
+  headGroup.add(head);
+  const earL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), skinMat);
+  earL.scale.set(0.45, 1, 0.8);
+  earL.position.set(-0.176, H(1.60), 0);
+  headGroup.add(earL);
+  const earR = earL.clone();
+  earR.position.x = 0.176;
+  headGroup.add(earR);
+  // 髮:只坐頭頂(theta 0~0.34π,髮際線高於眉/眼/耳)→ 耳前一律無髮
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.34), hairMat);
+  hairCap.position.y = H(1.63);
+  headGroup.add(hairCap);
+  // 後腦髮片:EAR_SAFE_PHI(前緣留在耳後 z<0)
+  const hairBack = new THREE.Mesh(
+    new THREE.SphereGeometry(0.184, 14, 8, EAR_SAFE_PHI.start, EAR_SAFE_PHI.end - EAR_SAFE_PHI.start, Math.PI * 0.28, Math.PI * 0.34),
+    hairMat,
+  );
+  hairBack.position.y = H(1.60);
+  headGroup.add(hairBack);
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), faceWhite);
+  eyeL.position.set(-0.066, H(1.63), 0.15);
+  headGroup.add(eyeL);
+  const eyeR = eyeL.clone();
+  eyeR.position.x = 0.066;
+  headGroup.add(eyeR);
+  const pupL = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 6), faceDark);
+  pupL.position.set(-0.066, H(1.63), 0.172);
+  headGroup.add(pupL);
+  const pupR = pupL.clone();
+  pupR.position.x = 0.066;
+  headGroup.add(pupR);
+  // 歡呼張嘴(O 形)
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), mouthMat);
+  mouth.scale.set(1, 1.25, 0.6);
+  mouth.position.set(0, H(1.55), 0.15);
+  headGroup.add(mouth);
+
+  // 簡單雙節手臂:pivot=肩、joint=肘(animateCrowdCheer 契約需 pivot+joint)
+  const mkArm = (x) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 1.32, 0);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.2, 4, 8), robeMat);
+    upper.position.y = -0.12;
+    pivot.add(upper);
+    const joint = new THREE.Group();
+    joint.position.y = -0.24;
+    pivot.add(joint);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.17, 4, 8), skinMat);
+    fore.position.y = -0.1;
+    joint.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), skinMat);
+    hand.position.y = -0.21;
+    joint.add(hand);
+    rig.add(pivot);
+    return { pivot, joint };
+  };
+  const leftArm = mkArm(-0.2);
+  const rightArm = mkArm(0.2);
+
+  return { group, rig, torso, headGroup, leftArm, rightArm };
 }
 
 function applyThemeToVisuals(visuals, theme) {
@@ -875,6 +979,32 @@ export class BasketballGame {
       this.scene.add(heads, torsos, eyesW, pupils, mouths);
     }
 
+    // 前排歡呼觀眾(個體人偶,可舉手人浪+左右看)——擺在密集看台之前、面向球場
+    {
+      this.crowdFigures = [];
+      const crowdGroup = new THREE.Group();
+      const robes = [0xe86a5a, 0x5aa1e8, 0xe8c95a, 0x6b4a2a, 0x4a6b3a, 0xd8d0c0, 0xc94f8f, 0x8a5ac0];
+      const skins = [0xf2c89a, 0xe6b183, 0xd9a06f];
+      const hairs = [0x2b2119, 0x171310, 0x5a3a1e, 0x8a5a2a];
+      const perSide = 12;
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < perSide; i += 1) {
+          const fan = makeCheerFan({
+            robe: robes[(i + (side > 0 ? 4 : 0)) % robes.length],
+            skin: skins[(i + (side > 0 ? 1 : 0)) % skins.length],
+            hair: hairs[(i * 2 + (side > 0 ? 1 : 0)) % hairs.length],
+          });
+          const x = -(HALF_COURT - 3) + i * ((COURT_LENGTH - 6) / (perSide - 1));
+          fan.group.position.set(x, 0.45, side * (HALF_WIDTH + 3.0)); // 前排,略高於邊線牆
+          fan.group.rotation.y = side > 0 ? Math.PI : 0; // 一律面向球場(side>0 面 −z、side<0 面 +z)
+          crowdGroup.add(fan.group);
+          // 相位=座號×0.9 + 對側偏移(決定性!絕不用建構期 Math.random)→ 此起彼落人浪
+          this.crowdFigures.push({ fig: fan, phase: i * 0.9 + (side > 0 ? 1.7 : 0), rigY: fan.rig.position.y });
+        }
+      }
+      this.scene.add(crowdGroup);
+    }
+
     this.hoops.home = this.createHoop(-1);
     this.hoops.away = this.createHoop(1);
     this.syncCourtVisuals();
@@ -965,6 +1095,9 @@ export class BasketballGame {
           jumpH: 0,
           decisionTimer: randomBetween(0.15, 0.5),
           animationTime: randomBetween(0, Math.PI * 2),
+          // idle 轉頭節奏(決定性:隊伍×角色錯開,兩人不整齊劃一)
+          glancePhase: (team === "home" ? 0 : 2.7) + roleIndex * 1.3,
+          glancePeriod: 5.4 + roleIndex * 0.35,
           visuals,
           group: visuals.group,
           selectionRing: visuals.selectionRing,
@@ -2664,7 +2797,7 @@ export class BasketballGame {
     this.camera.lookAt(this.pointer.cameraLook);
   }
 
-  animatePlayer(player, delta) {
+  animatePlayer(player, delta, idleHead = false) {
     const visuals = player.visuals;
     const owner = this.getBallOwner();
     const shot = this.ball.pendingShot;
@@ -2683,7 +2816,8 @@ export class BasketballGame {
     visuals.rig.position.y = bob;
     visuals.torso.rotation.z = clamp(player.velocity.x * -0.05, -0.18, 0.18);
     visuals.torso.rotation.x = isOwner ? 0.06 : speedRatio * 0.05;
-    visuals.head.rotation.y = Math.sin(cycle * 0.5) * 0.12;
+    // 走動時整顆頭(headGroup)輕微左右擺;主要球員(idleHead)交給 animateIdleHead 接管、這裡不搶
+    if (!idleHead) visuals.headGroup.rotation.y = Math.sin(cycle * 0.5) * 0.12;
 
     if (isShooting) {
       visuals.leftArm.pivot.rotation.x = -2.2;
@@ -2739,8 +2873,19 @@ export class BasketballGame {
       player.group.rotation.y = player.heading;
       player.selectionRing.visible = controlled?.id === player.id;
       player.possessionRing.visible = owner?.id === player.id;
-      this.animatePlayer(player, delta);
+      // idle 生動只給「主要球員」(持球者/操控主角,非全部路人)——偶爾平滑轉頭看一下+咧嘴微笑
+      const isKey = controlled?.id === player.id || owner?.id === player.id;
+      this.animatePlayer(player, delta, isKey);
+      if (isKey) {
+        animateIdleHead(player.visuals.headGroup, player.visuals.smile, this.time, {
+          phase: player.glancePhase || 0,
+          period: player.glancePeriod || 5.6,
+        });
+      }
     }
+
+    // 觀眾生動:舉手歡呼人浪+左右看(相位錯開,決定性)
+    if (this.crowdFigures) animateCrowdCheer(this.crowdFigures, this.time);
 
     this.ball.mesh.position.copy(this.ball.position);
   }
